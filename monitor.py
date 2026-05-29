@@ -10,34 +10,40 @@ import claude_client
 import notifier
 
 ET = ZoneInfo("America/New_York")
+PRE_MARKET   = time(9, 25)   # Opening message 5 min before open
 MARKET_OPEN  = time(9, 30)
 MARKET_CLOSE = time(16, 0)
 
-# Fixed 30-min schedule: 9:30, 10:00, 10:30 ... 15:30, 16:00
 SCHEDULE_MINUTES = list(range(0, 60, 10))  # [0, 10, 20, 30, 40, 50]
 
 _last_post_time: datetime = None
 _last_analysis: dict = {}
 _opening_sent = False
 _closing_sent = False
+_pre_market_sent = False
 
 
 def _now_et() -> datetime:
     return datetime.now(ET)
 
 
+def _is_weekday() -> bool:
+    return _now_et().weekday() < 5
+
+
+def _is_pre_market() -> bool:
+    now = _now_et()
+    return _is_weekday() and PRE_MARKET <= now.time() < MARKET_OPEN
+
+
 def _is_market_open() -> bool:
     now = _now_et()
-    if now.weekday() >= 5:
-        return False
-    return MARKET_OPEN <= now.time() < MARKET_CLOSE
+    return _is_weekday() and MARKET_OPEN <= now.time() < MARKET_CLOSE
 
 
 def _is_closing_time() -> bool:
     now = _now_et()
-    if now.weekday() >= 5:
-        return False
-    return now.time() >= MARKET_CLOSE and now.time() < time(16, 5)
+    return _is_weekday() and MARKET_CLOSE <= now.time() < time(16, 5)
 
 
 def _is_scheduled_slot() -> bool:
@@ -106,7 +112,7 @@ async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, 
 
 
 async def monitor_loop() -> None:
-    global _opening_sent, _closing_sent, _last_post_time
+    global _opening_sent, _closing_sent, _pre_market_sent, _last_post_time
 
     print("[Monitor] Iniciando loop QD Bot...")
 
@@ -116,45 +122,52 @@ async def monitor_loop() -> None:
         try:
             config = config_manager.load()
             now = _now_et()
+            pre_market = _is_pre_market()
             market_open = _is_market_open()
             closing = _is_closing_time()
 
-            print(f"[Monitor] {now.strftime('%H:%M:%S ET')} | {'ABIERTO' if market_open else 'CERRADO'}")
+            print(f"[Monitor] {now.strftime('%H:%M:%S ET')} | {'PRE' if pre_market else 'ABIERTO' if market_open else 'CIERRE' if closing else 'CERRADO'}")
 
             timeout = aiohttp.ClientTimeout(total=20)
+            tickers = config.get("tickers", ["SPY"])
 
-            # Opening message — first slot 9:30
-            if market_open and not _opening_sent:
+            # 9:25 AM ET — Mensaje de apertura (5 min antes)
+            if pre_market and not _pre_market_sent:
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    for ticker in config.get("tickers", ["SPY"]):
+                    for ticker in tickers:
                         await run_ticker(ticker, config, session, "apertura")
-                _opening_sent = True
+                _pre_market_sent = True
+                _opening_sent = False
                 _closing_sent = False
+
+            # 9:30 AM ET — Primera lectura del día
+            elif market_open and not _opening_sent:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    for ticker in tickers:
+                        await run_ticker(ticker, config, session, "lectura")
+                _opening_sent = True
                 last_slot_checked = now.replace(second=0, microsecond=0)
 
-            # Closing message — at 4:00 PM
+            # 4:00 PM ET — Mensaje de cierre
             elif closing and _opening_sent and not _closing_sent:
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    for ticker in config.get("tickers", ["SPY"]):
+                    for ticker in tickers:
                         await run_ticker(ticker, config, session, "cierre")
                 _closing_sent = True
 
-            # Scheduled 30-min readings during market hours
+            # 9:30–4:00 — Lecturas cada 10 min + alertas por cambio
             elif market_open and _opening_sent:
                 current_slot = now.replace(second=0, microsecond=0)
 
-                # Check if we're in a new 30-min slot
                 if _is_scheduled_slot() and current_slot != last_slot_checked:
                     async with aiohttp.ClientSession(timeout=timeout) as session:
-                        for ticker in config.get("tickers", ["SPY"]):
+                        for ticker in tickers:
                             await run_ticker(ticker, config, session, "lectura")
                             await asyncio.sleep(1)
                     last_slot_checked = current_slot
-
-                # Between slots: check for significant changes only
                 else:
                     async with aiohttp.ClientSession(timeout=timeout) as session:
-                        for ticker in config.get("tickers", ["SPY"]):
+                        for ticker in tickers:
                             market_data = await qd_client.fetch_market_data(
                                 session, ticker, config["qd_api_key"]
                             )
@@ -165,8 +178,9 @@ async def monitor_loop() -> None:
                                     await _post_reading(ticker, analysis, config, "lectura")
                                 _last_analysis[ticker] = analysis
 
-            # Reset opening flag after close
-            if not market_open and not closing:
+            # Reset flags al final del día
+            if not pre_market and not market_open and not closing:
+                _pre_market_sent = False
                 _opening_sent = False
 
         except Exception as e:
