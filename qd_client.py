@@ -50,12 +50,15 @@ async def fetch_market_data(
     ticker: str,
     api_key: str,
 ) -> dict:
-    """Fetches price + DEX + GEX for a ticker. Returns combined dict."""
+    """Fetches price + DEX + GEX in parallel for speed."""
+    import asyncio
     today = date.today().isoformat()
 
-    price = await fetch_price(session, ticker, api_key, today)
-    dex_map = await fetch_exposure_0dte(session, ticker, api_key, today, "DELTA")
-    gex_map = await fetch_exposure_0dte(session, ticker, api_key, today, "GAMMA")
+    price_task = asyncio.create_task(fetch_price(session, ticker, api_key, today))
+    dex_task   = asyncio.create_task(fetch_exposure_0dte(session, ticker, api_key, today, "DELTA"))
+    gex_task   = asyncio.create_task(fetch_exposure_0dte(session, ticker, api_key, today, "GAMMA"))
+
+    price, dex_map, gex_map = await asyncio.gather(price_task, dex_task, gex_task)
 
     return {
         "ticker": ticker,
