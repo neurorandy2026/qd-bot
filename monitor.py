@@ -71,22 +71,32 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) ->
     global _last_post_time
 
     next_time = _next_slot_time()
+    dashboard.add_log(f"Llamando a Claude ({tipo})...")
+    anthropic_key = config.get("anthropic_api_key", "")
+    if not anthropic_key:
+        dashboard.add_log("[ERROR] ANTHROPIC_API_KEY no configurada en Railway")
+        return
+    dashboard.add_log(f"API key: ...{anthropic_key[-8:]}")
+
     message = await claude_client.generate_reading(
         analysis=analysis,
-        anthropic_api_key=config["anthropic_api_key"],
+        anthropic_api_key=anthropic_key,
         next_time=next_time,
         tipo=tipo,
     )
 
     if message:
+        dashboard.add_log(f"Claude OK ({len(message)} chars) — enviando Discord...")
         ok = await notifier.send_webhook(config["discord"]["webhook_alumnos"], message)
         if ok:
             _last_post_time = datetime.now(ET)
             stats.record_lectura(ticker, analysis.get("price", 0), tipo, message)
             stats.set_active_levels(ticker, analysis.get("supports", []), analysis.get("resistances", []))
             dashboard.add_log(f"[{tipo.upper()}] {ticker} ${analysis.get('price', 0):.0f} → Discord ✅")
+        else:
+            dashboard.add_log(f"[ERROR] Discord webhook fallo")
     else:
-        dashboard.add_log(f"[ERROR] No se pudo generar lectura para {ticker}")
+        dashboard.add_log(f"[ERROR] Claude no genero mensaje — revisa ANTHROPIC_API_KEY en Railway")
 
 
 async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, tipo: str) -> None:
