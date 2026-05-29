@@ -165,6 +165,8 @@ async def monitor_loop() -> None:
     port = int(os.environ.get("PORT", 8080))
     await dashboard.start_dashboard(port)
     dashboard.set_trigger_callback(manual_trigger)
+    _cfg = config_manager.load()
+    dashboard.set_anthropic_key(_cfg.get("anthropic_api_key", ""))
     dashboard.add_log("QD Bot iniciado")
     print("[Monitor] Iniciando loop QD Bot...")
 

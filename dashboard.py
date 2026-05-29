@@ -3,15 +3,22 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import stats as st
 import criteria as cr
+import claude_client
 
 ET = ZoneInfo("America/New_York")
 _log: list = []
 _trigger_callback = None
+_anthropic_key: str = ""
 
 
 def set_trigger_callback(fn):
     global _trigger_callback
     _trigger_callback = fn
+
+
+def set_anthropic_key(key: str):
+    global _anthropic_key
+    _anthropic_key = key
 
 
 def add_log(msg: str):
@@ -352,8 +359,17 @@ async def handle_add_rule(request):
     text = data.get("rule_text", "").strip()
     category = data.get("category", "General")
     if text:
-        rule = cr.add_rule(text, category)
-        add_log(f"Regla #{rule['id']} agregada [{category}]: {text[:50]}")
+        final_text = text
+        if _anthropic_key:
+            try:
+                refined = await claude_client.refine_rule(text, _anthropic_key)
+                if refined and refined != text:
+                    add_log(f"Regla refinada por IA: {refined[:60]}")
+                    final_text = refined
+            except Exception as e:
+                add_log(f"[WARN] No se pudo refinar regla: {e}")
+        rule = cr.add_rule(final_text, category)
+        add_log(f"Regla #{rule['id']} [{category}] guardada")
     raise web.HTTPFound("/")
 
 

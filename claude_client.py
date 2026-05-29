@@ -89,6 +89,37 @@ _Hasta mañana. 💪_
 - Tono: directo, seguro, como Randy hablando a su equipo en Discord"""
 
 
+async def refine_rule(raw_text: str, anthropic_api_key: str) -> str:
+    """Pass a raw criteria rule through Claude to reformat it clearly."""
+    prompt = (
+        "Eres asistente de un instructor de opciones llamado Randy. "
+        "El instructor escribió esta regla para su bot de análisis de mercado:\n\n"
+        f'"{raw_text}"\n\n'
+        "Reformúlala en una sola oración clara, concisa y directa para que el bot la aplique "
+        "al generar mensajes para sus estudiantes. No expliques, no agregues contexto, "
+        "solo devuelve la regla reformulada."
+    )
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 150,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        ) as resp:
+            if resp.status != 200:
+                return raw_text  # fallback to original
+            data = await resp.json()
+            refined = data.get("content", [{}])[0].get("text", "").strip()
+            return refined if refined else raw_text
+
+
 async def generate_reading(
     analysis: dict,
     anthropic_api_key: str,
