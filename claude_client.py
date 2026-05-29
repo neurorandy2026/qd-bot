@@ -142,9 +142,12 @@ async def generate_reading(
         ) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                print(f"[Claude] Error: {resp.status} — {text[:200]}")
+                print(f"[Claude] Error {resp.status}: {text[:400]}")
                 return None
             data = await resp.json()
+            if "content" not in data or not data["content"]:
+                print(f"[Claude] Respuesta inesperada: {data}")
+                return None
             text = data["content"][0]["text"]
             text = text.strip().strip("```").strip()
             return text
