@@ -124,7 +124,7 @@ async def generate_reading(
         "magnetic_zones": analysis.get("magnetic_zones", []),
     }
 
-    criteria_text = criteria.get_active_text()
+    criteria_text = criteria.get_active_prompt()
     criteria_section = f"\n\nAJUSTES DE CRITERIO DEL INSTRUCTOR (aplica siempre):\n{criteria_text}" if criteria_text else ""
     user_message = f"Genera el mensaje para estos datos:\n{json.dumps(input_data, indent=2)}{criteria_section}"
 

@@ -57,6 +57,8 @@ HTML = """<!DOCTYPE html>
   .btn-primary {{ background: #238636; color: #fff; }}
   .btn-secondary {{ background: #1f6feb; color: #fff; }}
   .btn-ghost {{ background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }}
+  .btn-danger {{ background: #6e1c1c; color: #f85149; border: 1px solid #6e1c1c; font-size: 0.78em; padding: 4px 10px; }}
+  .btn-sm {{ padding: 4px 12px; font-size: 0.78em; }}
   .panels {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
   @media(max-width: 600px) {{ .panels {{ grid-template-columns: 1fr; }} }}
   .panel {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 14px; }}
@@ -79,12 +81,29 @@ HTML = """<!DOCTYPE html>
   .discord-msg {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
                   margin-bottom: 8px; font-size: 0.78em; white-space: pre-wrap; line-height: 1.5; }}
   .discord-msg .msg-header {{ color: #8b949e; font-size: 0.85em; margin-bottom: 6px; }}
-  textarea {{ width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
-              color: #c9d1d9; padding: 10px; font-size: 0.85em; font-family: monospace;
-              resize: vertical; min-height: 120px; }}
-  textarea:focus {{ outline: none; border-color: #58a6ff; }}
-  .criteria-history {{ margin-top: 10px; }}
-  .criteria-item {{ font-size: 0.75em; color: #8b949e; padding: 4px 0; border-bottom: 1px solid #21262d; }}
+  /* Criteria styles */
+  .criteria-form {{ display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }}
+  .criteria-form input[type=text] {{ flex: 1; min-width: 200px; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 6px; color: #c9d1d9; padding: 8px 12px; font-size: 0.85em; }}
+  .criteria-form input[type=text]:focus {{ outline: none; border-color: #58a6ff; }}
+  .criteria-form select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 8px; font-size: 0.85em; }}
+  .rule-card {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
+                margin-bottom: 8px; }}
+  .rule-card.inactive {{ opacity: 0.4; }}
+  .rule-header {{ display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }}
+  .rule-text {{ font-size: 0.85em; color: #c9d1d9; flex: 1; line-height: 1.4; }}
+  .cat-badge {{ font-size: 0.7em; padding: 2px 7px; border-radius: 10px; font-weight: 600; white-space: nowrap; }}
+  .cat-DEX {{ background: #0d2137; color: #58a6ff; }}
+  .cat-GEX {{ background: #0d2b1a; color: #3fb950; }}
+  .cat-Mensajes {{ background: #2b1f0d; color: #d29922; }}
+  .cat-Alertas {{ background: #2b0d1a; color: #f85149; }}
+  .cat-General {{ background: #21262d; color: #8b949e; }}
+  .rule-meta {{ font-size: 0.72em; color: #8b949e; margin-top: 3px; }}
+  .toggle {{ cursor: pointer; font-size: 1.1em; }}
+  .active-prompt-preview {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px 12px; font-size: 0.75em; color: #8b949e; white-space: pre-wrap;
+    max-height: 80px; overflow-y: auto; margin-bottom: 10px; }}
 </style>
 </head>
 <body>
@@ -99,7 +118,7 @@ HTML = """<!DOCTYPE html>
   <span style="color:#8b949e">{time_et}</span>
   <span style="color:#8b949e">·</span>
   <span>{last_ticker} <strong style="color:#58a6ff">${last_price}</strong></span>
-  <span style="color:#8b949e; font-size:0.8em">Último msg: {last_msg_time}</span>
+  <span style="color:#8b949e;font-size:0.8em">Último msg: {last_msg_time}</span>
 </div>
 
 <div class="grid">
@@ -120,9 +139,9 @@ HTML = """<!DOCTYPE html>
     <div class="sub">{levels_held}✅ {levels_broken}❌</div>
   </div>
   <div class="card">
-    <div class="label">Esta Semana</div>
-    <div class="value green">{week_lecturas}</div>
-    <div class="sub">lecturas enviadas</div>
+    <div class="label">Reglas Activas</div>
+    <div class="value green">{active_rules}</div>
+    <div class="sub">de {total_rules} reglas</div>
   </div>
 </div>
 
@@ -149,26 +168,35 @@ HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<div class="panel" style="margin-top:12px">
+  <h3>🧠 Criterio del Instructor — Reglas Activas en Claude</h3>
+
+  <form class="criteria-form" method="POST" action="/add-rule">
+    <input type="text" name="rule_text" placeholder="Nueva regla... ej: Si hay zona magnética de 3 strikes, mencionar el target exacto" required>
+    <select name="category">
+      <option value="General">General</option>
+      <option value="DEX">DEX</option>
+      <option value="GEX">GEX</option>
+      <option value="Mensajes">Mensajes</option>
+      <option value="Alertas">Alertas</option>
+    </select>
+    <button type="submit" class="btn-primary btn-sm">+ Agregar</button>
+  </form>
+
+  {rules_html}
+
+  {prompt_preview_html}
+</div>
+
 <div class="panels" style="margin-top:12px">
   <div class="panel">
     <h3>💬 Últimos Mensajes a Discord</h3>
     {discord_msgs_html}
   </div>
   <div class="panel">
-    <h3>🧠 Criterio del Instructor</h3>
-    <form method="POST" action="/save-criteria">
-      <textarea name="criteria_text" placeholder="Escribe ajustes de criterio aquí... Ej: Cuando hay 3 strikes consecutivos fuertes, mencionar que el precio puede moverse rápido hacia el target superior.">{current_criteria}</textarea>
-      <button type="submit" class="btn-primary" style="margin-top:8px;width:100%">💾 Guardar Criterio</button>
-    </form>
-    <div class="criteria-history">
-      {criteria_history_html}
-    </div>
+    <h3>📋 Log del Bot</h3>
+    {log_html}
   </div>
-</div>
-
-<div class="panel" style="margin-top:12px">
-  <h3>📋 Log del Bot</h3>
-  {log_html}
 </div>
 
 <script>setTimeout(() => location.reload(), 30000);</script>
@@ -194,7 +222,7 @@ def _build_active_levels(data: dict) -> str:
 def _build_history(data: dict) -> str:
     history = data.get("history", [])[:10]
     if not history:
-        return '<p style="color:#8b949e;font-size:0.82em">Sin historial aún — el bot registra si los niveles aguantan o rompen</p>'
+        return '<p style="color:#8b949e;font-size:0.82em">Sin historial aún</p>'
     html = ""
     for h in history:
         badge_class = "green" if "Aguantó" in h["outcome"] else "red"
@@ -206,11 +234,52 @@ def _build_history(data: dict) -> str:
     return html
 
 
+def _build_rules(rules: list) -> str:
+    if not rules:
+        return '<p style="color:#8b949e;font-size:0.82em;padding:8px 0">Sin reglas aún. Agrega tu primera regla arriba.</p>'
+    html = ""
+    for r in rules:
+        active = r.get("active", True)
+        inactive_class = "" if active else " inactive"
+        toggle_label = "⏸" if active else "▶"
+        toggle_action = "disable" if active else "enable"
+        cat = r.get("category", "General")
+        html += f'''<div class="rule-card{inactive_class}">
+          <div class="rule-header">
+            <span class="cat-badge cat-{cat}">{cat}</span>
+            <span class="rule-text">{r["text"]}</span>
+            <form method="POST" action="/toggle-rule" style="display:inline">
+              <input type="hidden" name="rule_id" value="{r['id']}">
+              <input type="hidden" name="action" value="{toggle_action}">
+              <button type="submit" class="btn-ghost btn-sm toggle" title="{"Desactivar" if active else "Activar"}">{toggle_label}</button>
+            </form>
+            <form method="POST" action="/delete-rule" style="display:inline">
+              <input type="hidden" name="rule_id" value="{r['id']}">
+              <button type="submit" class="btn-danger" onclick="return confirm('¿Eliminar esta regla?')">✕</button>
+            </form>
+          </div>
+          <div class="rule-meta">#{r['id']} · {r.get("created_at","")}</div>
+        </div>'''
+    return html
+
+
+def _build_prompt_preview(prompt: str) -> str:
+    if not prompt:
+        return ""
+    return f'''<div style="margin-top:10px">
+      <div style="color:#8b949e;font-size:0.72em;margin-bottom:4px">PROMPT ACTIVO ENVIADO A CLAUDE:</div>
+      <div class="active-prompt-preview">{prompt}</div>
+    </div>'''
+
+
 async def handle_index(request):
     now = datetime.now(ET)
     time_str = now.strftime("%I:%M:%S %p ET")
     data = st.get()
     accuracy = st.accuracy_pct()
+    crit_data = cr.get_all()
+    rules = crit_data.get("rules", [])
+    active_rules = sum(1 for r in rules if r.get("active", True))
 
     weekday = now.weekday()
     hour_min = now.hour * 60 + now.minute
@@ -236,27 +305,11 @@ async def handle_index(request):
         f'<div class="log-entry">{e}</div>' for e in reversed(_log[-20:])
     ) or '<div class="log-entry" style="color:#8b949e">Sin actividad aún</div>'
 
-    # Discord messages
     disc_msgs = data.get("discord_messages", [])
-    if disc_msgs:
-        discord_msgs_html = "".join(
-            f'<div class="discord-msg"><div class="msg-header">📤 {m["tipo"]} · {m["ticker"]} · {m["time"]}</div>{m["text"]}</div>'
-            for m in disc_msgs
-        )
-    else:
-        discord_msgs_html = '<p style="color:#8b949e;font-size:0.82em">Aún no hay mensajes enviados</p>'
-
-    # Criteria
-    crit_data = cr.get_all()
-    current_criteria = crit_data.get("active_text", "")
-    crit_history = crit_data.get("notes", [])[1:6]
-    criteria_history_html = ""
-    if crit_history:
-        criteria_history_html = '<div style="margin-top:8px;color:#8b949e;font-size:0.75em">Historial:</div>'
-        criteria_history_html += "".join(
-            f'<div class="criteria-item">{n["saved_at"]} — {n["text"][:80]}{"..." if len(n["text"])>80 else ""}</div>'
-            for n in crit_history
-        )
+    discord_msgs_html = "".join(
+        f'<div class="discord-msg"><div class="msg-header">📤 {m["tipo"]} · {m["ticker"]} · {m["time"]}</div>{m["text"]}</div>'
+        for m in disc_msgs
+    ) or '<p style="color:#8b949e;font-size:0.82em">Aún no hay mensajes</p>'
 
     html = HTML.format(
         time_et=time_str,
@@ -273,12 +326,13 @@ async def handle_index(request):
         accuracy_color=accuracy_color,
         levels_held=data.get("levels_held", 0),
         levels_broken=data.get("levels_broken", 0),
-        week_lecturas=data.get("week_lecturas", 0),
+        active_rules=active_rules,
+        total_rules=len(rules),
         active_levels_html=_build_active_levels(data),
         history_html=_build_history(data),
+        rules_html=_build_rules(rules),
+        prompt_preview_html=_build_prompt_preview(crit_data.get("active_prompt", "")),
         discord_msgs_html=discord_msgs_html,
-        current_criteria=current_criteria,
-        criteria_history_html=criteria_history_html,
         log_html=log_html,
     )
     return web.Response(text=html, content_type="text/html")
@@ -293,12 +347,32 @@ async def handle_trigger(request):
     raise web.HTTPFound("/")
 
 
-async def handle_save_criteria(request):
+async def handle_add_rule(request):
     data = await request.post()
-    text = data.get("criteria_text", "").strip()
+    text = data.get("rule_text", "").strip()
+    category = data.get("category", "General")
     if text:
-        cr.save_note(text)
-        add_log(f"Criterio actualizado ({len(text)} chars)")
+        rule = cr.add_rule(text, category)
+        add_log(f"Regla #{rule['id']} agregada [{category}]: {text[:50]}")
+    raise web.HTTPFound("/")
+
+
+async def handle_toggle_rule(request):
+    data = await request.post()
+    rule_id = int(data.get("rule_id", 0))
+    action = data.get("action", "enable")
+    if rule_id:
+        cr.toggle_rule(rule_id, action == "enable")
+        add_log(f"Regla #{rule_id} {'activada' if action == 'enable' else 'desactivada'}")
+    raise web.HTTPFound("/")
+
+
+async def handle_delete_rule(request):
+    data = await request.post()
+    rule_id = int(data.get("rule_id", 0))
+    if rule_id:
+        cr.delete_rule(rule_id)
+        add_log(f"Regla #{rule_id} eliminada")
     raise web.HTTPFound("/")
 
 
@@ -306,7 +380,9 @@ def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_index)
     app.router.add_post("/trigger", handle_trigger)
-    app.router.add_post("/save-criteria", handle_save_criteria)
+    app.router.add_post("/add-rule", handle_add_rule)
+    app.router.add_post("/toggle-rule", handle_toggle_rule)
+    app.router.add_post("/delete-rule", handle_delete_rule)
     return app
 
 
