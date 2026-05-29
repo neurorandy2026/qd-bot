@@ -116,12 +116,19 @@ async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, 
 
 
 async def manual_trigger(tipo: str = "lectura") -> None:
-    """Called from dashboard to send an immediate reading."""
+    """Called from dashboard — always posts regardless of change detection."""
     config = config_manager.load()
     timeout = aiohttp.ClientTimeout(total=20)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for ticker in config.get("tickers", ["SPY"]):
-            await run_ticker(ticker, config, session, tipo)
+            market_data = await qd_client.fetch_market_data(session, ticker, config["qd_api_key"])
+            if not market_data.get("price"):
+                dashboard.add_log(f"[ERROR] Sin precio para {ticker}")
+                continue
+            analysis = ana.analyze(market_data)
+            if analysis:
+                await _post_reading(ticker, analysis, config, tipo)
+                _last_analysis[ticker] = analysis
 
 
 async def monitor_loop() -> None:
