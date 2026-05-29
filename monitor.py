@@ -14,7 +14,7 @@ MARKET_OPEN  = time(9, 30)
 MARKET_CLOSE = time(16, 0)
 
 # Fixed 30-min schedule: 9:30, 10:00, 10:30 ... 15:30, 16:00
-SCHEDULE_MINUTES = list(range(0, 60, 30))  # [0, 30]
+SCHEDULE_MINUTES = list(range(0, 60, 10))  # [0, 10, 20, 30, 40, 50]
 
 _last_post_time: datetime = None
 _last_analysis: dict = {}
