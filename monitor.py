@@ -8,6 +8,7 @@ import qd_client
 import analyzer as ana
 import claude_client
 import notifier
+import dashboard
 
 ET = ZoneInfo("America/New_York")
 PRE_MARKET   = time(9, 25)   # Opening message 5 min before open
@@ -80,8 +81,10 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) ->
         ok = await notifier.send_webhook(config["discord"]["webhook_alumnos"], message)
         if ok:
             _last_post_time = datetime.now(ET)
+            dashboard.add_log(f"[{tipo.upper()}] {ticker} ${analysis.get('price', 0):.0f} → Discord ✅")
             print(f"[Monitor] [{tipo.upper()}] Mensaje enviado para {ticker}")
     else:
+        dashboard.add_log(f"[ERROR] No se pudo generar lectura para {ticker}")
         print(f"[Monitor] Error generando mensaje para {ticker}")
 
 
@@ -111,9 +114,23 @@ async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, 
     _last_analysis[ticker] = analysis
 
 
+async def manual_trigger(tipo: str = "lectura") -> None:
+    """Called from dashboard to send an immediate reading."""
+    config = config_manager.load()
+    timeout = aiohttp.ClientTimeout(total=20)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for ticker in config.get("tickers", ["SPY"]):
+            await run_ticker(ticker, config, session, tipo)
+
+
 async def monitor_loop() -> None:
     global _opening_sent, _closing_sent, _pre_market_sent, _last_post_time
 
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    await dashboard.start_dashboard(port)
+    dashboard.set_trigger_callback(manual_trigger)
+    dashboard.add_log("QD Bot iniciado")
     print("[Monitor] Iniciando loop QD Bot...")
 
     last_slot_checked = None
@@ -126,7 +143,8 @@ async def monitor_loop() -> None:
             market_open = _is_market_open()
             closing = _is_closing_time()
 
-            print(f"[Monitor] {now.strftime('%H:%M:%S ET')} | {'PRE' if pre_market else 'ABIERTO' if market_open else 'CIERRE' if closing else 'CERRADO'}")
+            status = 'PRE' if pre_market else 'ABIERTO' if market_open else 'CIERRE' if closing else 'CERRADO'
+            print(f"[Monitor] {now.strftime('%H:%M:%S ET')} | {status}")
 
             timeout = aiohttp.ClientTimeout(total=20)
             tickers = config.get("tickers", ["SPY"])

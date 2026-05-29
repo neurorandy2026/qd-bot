@@ -29,6 +29,8 @@ DIRECCIONALIDAD — MUY IMPORTANTE:
 - NUNCA digas que si cae de un soporte irá hacia arriba, ni que si sube de una resistencia irá hacia abajo.
 - Advertencia correcta: "Si pierde $755, puede acelerar hacia $752" (no hacia $758)
 - Los soportes en la lista ya están ordenados de mayor a menor (más cercano primero)
+- En la advertencia ⚠️ siempre nombra el nivel específico al que puede caer: "Si pierde $754, puede deslizar hacia $752" — usa los strikes reales de la lista de soportes, no frases genéricas como "niveles más bajos"
+- Si solo hay un soporte y se pierde, di que "queda sin piso definido en el rango cercano"
 
 ━━━ FORMATO SEGÚN TIPO ━━━
 
