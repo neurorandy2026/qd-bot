@@ -94,9 +94,13 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) ->
             stats.set_active_levels(ticker, analysis.get("supports", []), analysis.get("resistances", []))
             dashboard.add_log(f"[{tipo.upper()}] {ticker} ${analysis.get('price', 0):.0f} → Discord ✅")
         else:
-            dashboard.add_log(f"[ERROR] Discord webhook fallo")
+            err = "[ERROR] Discord webhook fallo"
+            dashboard.add_log(err)
+            await notifier.send_webhook(config["discord"]["webhook_alumnos"], f"⚠️ **Bot Error:** {err}")
     else:
-        dashboard.add_log(f"[ERROR] Claude no genero mensaje — revisa ANTHROPIC_API_KEY en Railway")
+        err = f"[ERROR] Claude no genero mensaje — revisa ANTHROPIC_API_KEY en Railway (key termina en ...{anthropic_key[-6:]})"
+        dashboard.add_log(err)
+        await notifier.send_webhook(config["discord"]["webhook_alumnos"], f"⚠️ **Bot Error:** {err}")
 
 
 async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, tipo: str) -> None:
