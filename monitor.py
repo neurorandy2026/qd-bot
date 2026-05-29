@@ -9,6 +9,7 @@ import analyzer as ana
 import claude_client
 import notifier
 import dashboard
+import stats
 
 ET = ZoneInfo("America/New_York")
 PRE_MARKET   = time(9, 25)   # Opening message 5 min before open
@@ -81,11 +82,11 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) ->
         ok = await notifier.send_webhook(config["discord"]["webhook_alumnos"], message)
         if ok:
             _last_post_time = datetime.now(ET)
+            stats.record_lectura(ticker, analysis.get("price", 0), tipo)
+            stats.set_active_levels(ticker, analysis.get("supports", []), analysis.get("resistances", []))
             dashboard.add_log(f"[{tipo.upper()}] {ticker} ${analysis.get('price', 0):.0f} → Discord ✅")
-            print(f"[Monitor] [{tipo.upper()}] Mensaje enviado para {ticker}")
     else:
         dashboard.add_log(f"[ERROR] No se pudo generar lectura para {ticker}")
-        print(f"[Monitor] Error generando mensaje para {ticker}")
 
 
 async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, tipo: str) -> None:
@@ -192,6 +193,13 @@ async def monitor_loop() -> None:
                             if market_data.get("price"):
                                 analysis = ana.analyze(market_data)
                                 prev = _last_analysis.get(ticker)
+                                # Track level outcomes
+                                if prev and market_data.get("price"):
+                                    price = market_data["price"]
+                                    for s in prev.get("supports", []):
+                                        if s["dex_signal"] in ("preferido", "solido", "cuidado"):
+                                            held = price >= s["strike"]
+                                            stats.record_level_outcome(s["strike"], held, ticker)
                                 if ana.detect_significant_change(prev, analysis):
                                     await _post_reading(ticker, analysis, config, "lectura")
                                 _last_analysis[ticker] = analysis
