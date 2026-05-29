@@ -82,7 +82,7 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) ->
         ok = await notifier.send_webhook(config["discord"]["webhook_alumnos"], message)
         if ok:
             _last_post_time = datetime.now(ET)
-            stats.record_lectura(ticker, analysis.get("price", 0), tipo)
+            stats.record_lectura(ticker, analysis.get("price", 0), tipo, message)
             stats.set_active_levels(ticker, analysis.get("supports", []), analysis.get("resistances", []))
             dashboard.add_log(f"[{tipo.upper()}] {ticker} ${analysis.get('price', 0):.0f} → Discord ✅")
     else:

@@ -13,6 +13,7 @@ STATS_PATH = os.path.join(os.path.dirname(__file__), "stats.json")
 _defaults = {
     "total_lecturas": 0,
     "total_alertas": 0,
+    "discord_messages": [],  # last 5 full messages sent
     "levels_held": 0,
     "levels_broken": 0,
     "today": "",
@@ -52,7 +53,7 @@ def _reset_today_if_needed(data: dict):
         data["today_alertas"] = 0
 
 
-def record_lectura(ticker: str, price: float, tipo: str):
+def record_lectura(ticker: str, price: float, tipo: str, message: str = ""):
     data = _load()
     _reset_today_if_needed(data)
     data["total_lecturas"] += 1
@@ -64,6 +65,14 @@ def record_lectura(ticker: str, price: float, tipo: str):
     if tipo == "alerta":
         data["total_alertas"] += 1
         data["today_alertas"] += 1
+    if message:
+        data["discord_messages"].insert(0, {
+            "time": datetime.now(ET).strftime("%I:%M %p ET"),
+            "tipo": tipo.upper(),
+            "ticker": ticker,
+            "text": message,
+        })
+        data["discord_messages"] = data["discord_messages"][:5]
     _save(data)
 
 

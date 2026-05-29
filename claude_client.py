@@ -2,6 +2,7 @@ import aiohttp
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import criteria
 
 ET = ZoneInfo("America/New_York")
 
@@ -123,7 +124,9 @@ async def generate_reading(
         "magnetic_zones": analysis.get("magnetic_zones", []),
     }
 
-    user_message = f"Genera el mensaje para estos datos:\n{json.dumps(input_data, indent=2)}"
+    criteria_text = criteria.get_active_text()
+    criteria_section = f"\n\nAJUSTES DE CRITERIO DEL INSTRUCTOR (aplica siempre):\n{criteria_text}" if criteria_text else ""
+    user_message = f"Genera el mensaje para estos datos:\n{json.dumps(input_data, indent=2)}{criteria_section}"
 
     async with aiohttp.ClientSession() as session:
         async with session.post(

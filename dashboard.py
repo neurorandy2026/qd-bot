@@ -2,6 +2,7 @@ from aiohttp import web
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import stats as st
+import criteria as cr
 
 ET = ZoneInfo("America/New_York")
 _log: list = []
@@ -75,6 +76,15 @@ HTML = """<!DOCTYPE html>
   .badge.red {{ background: #3d0f0f; color: #f85149; }}
   .accuracy-bar {{ background: #21262d; border-radius: 4px; height: 8px; margin-top: 6px; overflow: hidden; }}
   .accuracy-fill {{ height: 100%; background: #3fb950; border-radius: 4px; transition: width 0.5s; }}
+  .discord-msg {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
+                  margin-bottom: 8px; font-size: 0.78em; white-space: pre-wrap; line-height: 1.5; }}
+  .discord-msg .msg-header {{ color: #8b949e; font-size: 0.85em; margin-bottom: 6px; }}
+  textarea {{ width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+              color: #c9d1d9; padding: 10px; font-size: 0.85em; font-family: monospace;
+              resize: vertical; min-height: 120px; }}
+  textarea:focus {{ outline: none; border-color: #58a6ff; }}
+  .criteria-history {{ margin-top: 10px; }}
+  .criteria-item {{ font-size: 0.75em; color: #8b949e; padding: 4px 0; border-bottom: 1px solid #21262d; }}
 </style>
 </head>
 <body>
@@ -136,6 +146,23 @@ HTML = """<!DOCTYPE html>
   <div class="panel">
     <h3>🎯 Historial de Niveles</h3>
     {history_html}
+  </div>
+</div>
+
+<div class="panels" style="margin-top:12px">
+  <div class="panel">
+    <h3>💬 Últimos Mensajes a Discord</h3>
+    {discord_msgs_html}
+  </div>
+  <div class="panel">
+    <h3>🧠 Criterio del Instructor</h3>
+    <form method="POST" action="/save-criteria">
+      <textarea name="criteria_text" placeholder="Escribe ajustes de criterio aquí... Ej: Cuando hay 3 strikes consecutivos fuertes, mencionar que el precio puede moverse rápido hacia el target superior.">{current_criteria}</textarea>
+      <button type="submit" class="btn-primary" style="margin-top:8px;width:100%">💾 Guardar Criterio</button>
+    </form>
+    <div class="criteria-history">
+      {criteria_history_html}
+    </div>
   </div>
 </div>
 
@@ -209,6 +236,28 @@ async def handle_index(request):
         f'<div class="log-entry">{e}</div>' for e in reversed(_log[-20:])
     ) or '<div class="log-entry" style="color:#8b949e">Sin actividad aún</div>'
 
+    # Discord messages
+    disc_msgs = data.get("discord_messages", [])
+    if disc_msgs:
+        discord_msgs_html = "".join(
+            f'<div class="discord-msg"><div class="msg-header">📤 {m["tipo"]} · {m["ticker"]} · {m["time"]}</div>{m["text"]}</div>'
+            for m in disc_msgs
+        )
+    else:
+        discord_msgs_html = '<p style="color:#8b949e;font-size:0.82em">Aún no hay mensajes enviados</p>'
+
+    # Criteria
+    crit_data = cr.get_all()
+    current_criteria = crit_data.get("active_text", "")
+    crit_history = crit_data.get("notes", [])[1:6]
+    criteria_history_html = ""
+    if crit_history:
+        criteria_history_html = '<div style="margin-top:8px;color:#8b949e;font-size:0.75em">Historial:</div>'
+        criteria_history_html += "".join(
+            f'<div class="criteria-item">{n["saved_at"]} — {n["text"][:80]}{"..." if len(n["text"])>80 else ""}</div>'
+            for n in crit_history
+        )
+
     html = HTML.format(
         time_et=time_str,
         market_status=market_status,
@@ -227,6 +276,9 @@ async def handle_index(request):
         week_lecturas=data.get("week_lecturas", 0),
         active_levels_html=_build_active_levels(data),
         history_html=_build_history(data),
+        discord_msgs_html=discord_msgs_html,
+        current_criteria=current_criteria,
+        criteria_history_html=criteria_history_html,
         log_html=log_html,
     )
     return web.Response(text=html, content_type="text/html")
@@ -241,10 +293,20 @@ async def handle_trigger(request):
     raise web.HTTPFound("/")
 
 
+async def handle_save_criteria(request):
+    data = await request.post()
+    text = data.get("criteria_text", "").strip()
+    if text:
+        cr.save_note(text)
+        add_log(f"Criterio actualizado ({len(text)} chars)")
+    raise web.HTTPFound("/")
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_index)
     app.router.add_post("/trigger", handle_trigger)
+    app.router.add_post("/save-criteria", handle_save_criteria)
     return app
 
 
