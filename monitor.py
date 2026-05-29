@@ -121,14 +121,21 @@ async def manual_trigger(tipo: str = "lectura") -> None:
     timeout = aiohttp.ClientTimeout(total=20)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for ticker in config.get("tickers", ["SPY"]):
+            dashboard.add_log(f"Obteniendo datos {ticker}...")
             market_data = await qd_client.fetch_market_data(session, ticker, config["qd_api_key"])
-            if not market_data.get("price"):
-                dashboard.add_log(f"[ERROR] Sin precio para {ticker}")
+            price = market_data.get("price")
+            dex_count = len(market_data.get("dex", {}))
+            gex_count = len(market_data.get("gex", {}))
+            dashboard.add_log(f"{ticker} precio=${price} dex_strikes={dex_count} gex_strikes={gex_count}")
+            if not price:
+                dashboard.add_log(f"[ERROR] Sin precio — mercado cerrado o error QD API")
                 continue
             analysis = ana.analyze(market_data)
-            if analysis:
-                await _post_reading(ticker, analysis, config, tipo)
-                _last_analysis[ticker] = analysis
+            supports = len(analysis.get("supports", []))
+            resistances = len(analysis.get("resistances", []))
+            dashboard.add_log(f"Analisis: {supports} soportes, {resistances} resistencias")
+            await _post_reading(ticker, analysis, config, tipo)
+            _last_analysis[ticker] = analysis
 
 
 async def monitor_loop() -> None:
