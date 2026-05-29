@@ -48,14 +48,15 @@ def _is_scheduled_slot() -> bool:
 
 def _next_slot_time() -> str:
     now = _now_et()
-    # Find next scheduled minute
+    current_minutes = now.hour * 60 + now.minute
+    # Find next slot strictly after now
     for m in SCHEDULE_MINUTES:
-        if m > now.minute:
-            next_dt = now.replace(minute=m, second=0)
-            return next_dt.strftime("%I:%M %p")
-    # Next hour
-    next_dt = (now + timedelta(hours=1)).replace(minute=SCHEDULE_MINUTES[0], second=0)
-    return next_dt.strftime("%I:%M %p")
+        slot_minutes = now.hour * 60 + m
+        if slot_minutes > current_minutes:
+            return now.replace(minute=m, second=0, microsecond=0).strftime("%I:%M %p")
+    # Next hour first slot
+    next_hour = (now + timedelta(hours=1)).replace(minute=SCHEDULE_MINUTES[0], second=0, microsecond=0)
+    return next_hour.strftime("%I:%M %p")
 
 
 async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) -> None:
