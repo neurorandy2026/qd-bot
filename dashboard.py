@@ -337,14 +337,14 @@ CONFIRM_HTML = """<!DOCTYPE html>
 </html>"""
 
 
-CAT_STYLES = {{
+CAT_STYLES = {
     "DEX": "background:#0d2137;color:#58a6ff",
     "GEX": "background:#0d2b1a;color:#3fb950",
     "Formato": "background:#1a1a2e;color:#8b8bff",
     "Error detectado": "background:#2b0d1a;color:#f85149",
     "Ejemplo bueno": "background:#0d2b1a;color:#3fb950",
     "General": "background:#21262d;color:#8b949e",
-}}
+}
 
 
 def _build_lessons(lessons: list) -> str:
