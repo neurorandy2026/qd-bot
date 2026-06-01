@@ -122,9 +122,19 @@ HTML = """<!DOCTYPE html>
     font-family: inherit; }}
   .lesson-form textarea:focus {{ outline: none; border-color: #58a6ff; }}
   .lesson-form-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
-  .lesson-form input[type=file] {{ flex: 1; color: #8b949e; font-size: 0.82em; }}
   .lesson-form select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
     color: #c9d1d9; padding: 8px; font-size: 0.85em; }}
+  .paste-zone {{ border: 2px dashed #30363d; border-radius: 8px; padding: 14px 16px;
+    text-align: center; color: #8b949e; font-size: 0.82em; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s; background: #0d1117; position: relative; }}
+  .paste-zone:focus {{ outline: none; }}
+  .paste-zone.has-image {{ border-color: #238636; background: #0d2119; }}
+  .paste-zone.active {{ border-color: #58a6ff; background: #0d1a2e; }}
+  .paste-preview {{ max-width: 100%; max-height: 200px; border-radius: 6px; margin-top: 8px;
+    border: 1px solid #30363d; display: block; }}
+  .paste-clear {{ position: absolute; top: 6px; right: 8px; background: #6e1c1c;
+    color: #f85149; border: none; border-radius: 4px; padding: 2px 8px; font-size: 0.75em;
+    cursor: pointer; display: none; }}
   .lesson-card {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
     padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; }}
   .lesson-card.inactive {{ opacity: 0.4; }}
@@ -246,10 +256,17 @@ HTML = """<!DOCTYPE html>
   <h3>📚 Lecciones de Aprendizaje — Randy enseña, Claude aprende</h3>
   <p class="lesson-count">Las lecciones activas se inyectan como contexto visual en cada lectura que genera Claude.</p>
 
-  <form class="lesson-form" method="POST" action="/add-lesson" enctype="multipart/form-data">
-    <textarea name="lesson_text" placeholder="Describe qué pasó y qué quieres que el bot aprenda... ej: Aquí el precio rebotó en $755 pero el bot no mencionó la zona magnética que había 3 strikes abajo" required></textarea>
+  <form class="lesson-form" id="lesson-form" method="POST" action="/add-lesson" enctype="multipart/form-data">
+    <div id="paste-zone" class="paste-zone" tabindex="0"
+         title="Haz clic aquí y pega tu capture (Cmd+V)">
+      <span id="paste-label">📋 Pega tu capture de Quant Data aquí — <kbd style="background:#21262d;padding:2px 5px;border-radius:3px;font-size:0.9em">Cmd+V</kbd></span>
+      <button type="button" class="paste-clear" id="paste-clear-btn" onclick="clearPaste(event)">✕ quitar</button>
+      <img id="paste-preview" class="paste-preview" style="display:none">
+    </div>
+    <input type="hidden" name="image_data" id="image_data">
+    <input type="hidden" name="image_mime" id="image_mime">
+    <textarea name="lesson_text" id="lesson_text" placeholder="Describe qué pasó y qué quieres que el bot aprenda... ej: Aquí el precio rebotó en $755 pero el bot no mencionó la zona magnética que había 3 strikes abajo" required></textarea>
     <div class="lesson-form-row">
-      <input type="file" name="image" accept="image/*">
       <select name="category">
         <option value="General">General</option>
         <option value="DEX">DEX</option>
@@ -261,6 +278,83 @@ HTML = """<!DOCTYPE html>
       <button type="submit" class="btn-secondary btn-sm">🧠 Analizar y Guardar</button>
     </div>
   </form>
+  <script>
+  (function() {{
+    const zone = document.getElementById('paste-zone');
+    const preview = document.getElementById('paste-preview');
+    const clearBtn = document.getElementById('paste-clear-btn');
+    const labelEl = document.getElementById('paste-label');
+    const imgData = document.getElementById('image_data');
+    const imgMime = document.getElementById('image_mime');
+    const textarea = document.getElementById('lesson_text');
+
+    function applyImage(file) {{
+      if (!file || !file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {{
+        const dataUrl = ev.target.result;
+        const b64 = dataUrl.split(',')[1];
+        imgData.value = b64;
+        imgMime.value = file.type;
+        preview.src = dataUrl;
+        preview.style.display = 'block';
+        zone.classList.add('has-image');
+        zone.classList.remove('active');
+        clearBtn.style.display = 'block';
+        labelEl.textContent = '✅ Capture listo';
+        textarea.focus();
+      }};
+      reader.readAsDataURL(file);
+    }}
+
+    // Paste anywhere on the page
+    document.addEventListener('paste', function(e) {{
+      const items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {{
+        if (items[i].type.startsWith('image/')) {{
+          e.preventDefault();
+          applyImage(items[i].getAsFile());
+          return;
+        }}
+      }}
+    }});
+
+    // Drag & drop support
+    zone.addEventListener('dragover', function(e) {{
+      e.preventDefault();
+      zone.classList.add('active');
+    }});
+    zone.addEventListener('dragleave', function() {{
+      zone.classList.remove('active');
+    }});
+    zone.addEventListener('drop', function(e) {{
+      e.preventDefault();
+      zone.classList.remove('active');
+      const file = e.dataTransfer.files[0];
+      applyImage(file);
+    }});
+
+    // Click zone to focus (so Cmd+V works)
+    zone.addEventListener('click', function() {{
+      zone.focus();
+      zone.classList.add('active');
+    }});
+    zone.addEventListener('blur', function() {{
+      if (!imgData.value) zone.classList.remove('active');
+    }});
+  }})();
+
+  function clearPaste(e) {{
+    e.stopPropagation();
+    document.getElementById('image_data').value = '';
+    document.getElementById('image_mime').value = '';
+    document.getElementById('paste-preview').style.display = 'none';
+    document.getElementById('paste-clear-btn').style.display = 'none';
+    document.getElementById('paste-label').textContent = '📋 Pega tu capture de Quant Data aquí — Cmd+V';
+    document.getElementById('paste-zone').classList.remove('has-image', 'active');
+  }}
+  </script>
 
   {lessons_html}
 </div>
@@ -591,12 +685,19 @@ async def handle_add_lesson(request):
 
     image_b64 = ""
     image_type = "image/png"
-    image_field = data.get("image")
-    if image_field and hasattr(image_field, "file"):
-        img_bytes = image_field.file.read()
-        if img_bytes:
-            image_b64 = base64.b64encode(img_bytes).decode()
-            image_type = image_field.content_type or "image/png"
+    # Clipboard paste (base64 sent via hidden input)
+    pasted_b64 = data.get("image_data", "").strip()
+    if pasted_b64:
+        image_b64 = pasted_b64
+        image_type = data.get("image_mime", "image/png") or "image/png"
+    else:
+        # Fallback: file upload
+        image_field = data.get("image")
+        if image_field and hasattr(image_field, "file"):
+            img_bytes = image_field.file.read()
+            if img_bytes:
+                image_b64 = base64.b64encode(img_bytes).decode()
+                image_type = image_field.content_type or "image/png"
 
     add_log("Analizando leccion con Claude...")
     analysis = {"regla": text, "categoria": category, "resumen": "", "pregunta": ""}
