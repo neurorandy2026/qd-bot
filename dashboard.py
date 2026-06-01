@@ -252,21 +252,103 @@ HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<div class="panel" style="margin-top:12px">
-  <h3>📚 Lecciones de Aprendizaje — Randy enseña, Claude aprende</h3>
-  <p class="lesson-count">Las lecciones activas se inyectan como contexto visual en cada lectura que genera Claude.</p>
+<div class="panel" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+  <div>
+    <h3 style="margin-bottom:4px">📚 Lecciones de Aprendizaje</h3>
+    <p style="color:#8b949e;font-size:0.8em">{active_lessons} activas inyectadas en cada lectura de Claude</p>
+  </div>
+  <a href="/lessons"><button class="btn-secondary">Abrir Lecciones →</button></a>
+</div>
 
-  <form class="lesson-form" id="lesson-form" method="POST" action="/add-lesson" enctype="multipart/form-data">
-    <div id="paste-zone" class="paste-zone" tabindex="0"
-         title="Haz clic aquí y pega tu capture (Cmd+V)">
-      <span id="paste-label">📋 Pega tu capture de Quant Data aquí — <kbd style="background:#21262d;padding:2px 5px;border-radius:3px;font-size:0.9em">Cmd+V</kbd></span>
+<script>setTimeout(() => location.reload(), 30000);</script>
+</body>
+</html>"""
+
+
+LESSONS_HTML = """<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QD Bot — Lecciones</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; padding: 20px; max-width: 800px; margin: 0 auto; }}
+  h1 {{ font-size: 1.3em; color: #58a6ff; margin-bottom: 4px; }}
+  .subtitle {{ color: #8b949e; font-size: 0.82em; margin-bottom: 20px; }}
+  .panel {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 14px; }}
+  .panel h3 {{ color: #8b949e; font-size: 0.78em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }}
+  .back-link {{ display: inline-block; color: #8b949e; font-size: 0.82em; margin-bottom: 16px; text-decoration: none; }}
+  .back-link:hover {{ color: #58a6ff; }}
+  /* Form */
+  .lesson-form {{ display: flex; flex-direction: column; gap: 10px; }}
+  .lesson-form textarea {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 10px 12px; font-size: 0.88em; resize: vertical; min-height: 80px; font-family: inherit; }}
+  .lesson-form textarea:focus {{ outline: none; border-color: #58a6ff; }}
+  .form-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
+  .form-row select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 8px; font-size: 0.85em; }}
+  /* Paste zone */
+  .paste-zone {{ border: 2px dashed #30363d; border-radius: 8px; padding: 18px;
+    text-align: center; color: #8b949e; font-size: 0.85em; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s; background: #0d1117; position: relative; }}
+  .paste-zone:focus {{ outline: none; }}
+  .paste-zone.has-image {{ border-color: #238636; background: #0d2119; }}
+  .paste-zone.active {{ border-color: #58a6ff; background: #0d1a2e; }}
+  .paste-preview {{ max-width: 100%; max-height: 260px; border-radius: 6px; margin-top: 10px;
+    border: 1px solid #30363d; display: block; margin-left: auto; margin-right: auto; }}
+  .paste-clear {{ position: absolute; top: 8px; right: 10px; background: #6e1c1c;
+    color: #f85149; border: none; border-radius: 4px; padding: 3px 10px; font-size: 0.75em; cursor: pointer; }}
+  /* Buttons */
+  button {{ border: none; padding: 10px 20px; font-size: 0.88em; font-weight: 600;
+    border-radius: 6px; cursor: pointer; transition: opacity 0.2s; }}
+  button:hover {{ opacity: 0.8; }}
+  .btn-primary {{ background: #238636; color: #fff; }}
+  .btn-secondary {{ background: #1f6feb; color: #fff; }}
+  .btn-ghost {{ background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }}
+  .btn-danger {{ background: #6e1c1c; color: #f85149; border: 1px solid #6e1c1c; font-size: 0.78em; padding: 4px 10px; }}
+  .btn-sm {{ padding: 4px 12px; font-size: 0.78em; }}
+  /* Lessons list */
+  .lesson-card {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; }}
+  .lesson-card.inactive {{ opacity: 0.4; }}
+  .lesson-thumb {{ width: 72px; height: 54px; object-fit: cover; border-radius: 4px;
+    border: 1px solid #30363d; flex-shrink: 0; background: #21262d; cursor: pointer; }}
+  .lesson-thumb-empty {{ width: 72px; height: 54px; border-radius: 4px; border: 1px dashed #30363d;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 1.3em; color: #30363d; }}
+  .lesson-body {{ flex: 1; min-width: 0; }}
+  .lesson-rule {{ font-size: 0.85em; color: #c9d1d9; line-height: 1.4; margin-bottom: 4px; }}
+  .lesson-meta {{ font-size: 0.72em; color: #8b949e; }}
+  .lesson-actions {{ display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex-shrink: 0; }}
+  .cat-badge {{ display: inline-block; font-size: 0.7em; padding: 2px 7px; border-radius: 10px; font-weight: 600; }}
+  .toggle {{ cursor: pointer; font-size: 1.1em; }}
+  /* Image modal */
+  .modal {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    z-index: 100; align-items: center; justify-content: center; cursor: zoom-out; }}
+  .modal.open {{ display: flex; }}
+  .modal img {{ max-width: 95vw; max-height: 90vh; border-radius: 8px; border: 1px solid #30363d; }}
+</style>
+</head>
+<body>
+
+<a class="back-link" href="/">← Volver al Dashboard</a>
+<h1>📚 Lecciones de Aprendizaje</h1>
+<p class="subtitle">Randy enseña · Claude aprende · Se aplica en cada lectura</p>
+
+<div class="panel">
+  <h3>Nueva Lección</h3>
+  <form class="lesson-form" method="POST" action="/add-lesson" enctype="multipart/form-data">
+    <div id="paste-zone" class="paste-zone" tabindex="0">
+      <span id="paste-label">📋 Pega tu capture de Quant Data aquí — <kbd style="background:#21262d;padding:2px 6px;border-radius:3px">Cmd+V</kbd> &nbsp;·&nbsp; o arrastra la imagen</span>
       <button type="button" class="paste-clear" id="paste-clear-btn" onclick="clearPaste(event)">✕ quitar</button>
       <img id="paste-preview" class="paste-preview" style="display:none">
     </div>
     <input type="hidden" name="image_data" id="image_data">
     <input type="hidden" name="image_mime" id="image_mime">
-    <textarea name="lesson_text" id="lesson_text" placeholder="Describe qué pasó y qué quieres que el bot aprenda... ej: Aquí el precio rebotó en $755 pero el bot no mencionó la zona magnética que había 3 strikes abajo" required></textarea>
-    <div class="lesson-form-row">
+    <textarea name="lesson_text" id="lesson_text"
+      placeholder="Describe qué pasó y qué quieres que el bot aprenda...&#10;ej: El precio estaba en $558 con zona magnética abajo pero el bot no advirtió del siguiente soporte a $554" required></textarea>
+    <div class="form-row">
       <select name="category">
         <option value="General">General</option>
         <option value="DEX">DEX</option>
@@ -275,91 +357,87 @@ HTML = """<!DOCTYPE html>
         <option value="Error detectado">Error detectado</option>
         <option value="Ejemplo bueno">Ejemplo bueno</option>
       </select>
-      <button type="submit" class="btn-secondary btn-sm">🧠 Analizar y Guardar</button>
+      <button type="submit" class="btn-secondary">🧠 Analizar y Guardar</button>
     </div>
   </form>
-  <script>
-  (function() {{
-    const zone = document.getElementById('paste-zone');
-    const preview = document.getElementById('paste-preview');
-    const clearBtn = document.getElementById('paste-clear-btn');
-    const labelEl = document.getElementById('paste-label');
-    const imgData = document.getElementById('image_data');
-    const imgMime = document.getElementById('image_mime');
-    const textarea = document.getElementById('lesson_text');
+</div>
 
-    function applyImage(file) {{
-      if (!file || !file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = function(ev) {{
-        const dataUrl = ev.target.result;
-        const b64 = dataUrl.split(',')[1];
-        imgData.value = b64;
-        imgMime.value = file.type;
-        preview.src = dataUrl;
-        preview.style.display = 'block';
-        zone.classList.add('has-image');
-        zone.classList.remove('active');
-        clearBtn.style.display = 'block';
-        labelEl.textContent = '✅ Capture listo';
-        textarea.focus();
-      }};
-      reader.readAsDataURL(file);
-    }}
-
-    // Paste anywhere on the page
-    document.addEventListener('paste', function(e) {{
-      const items = e.clipboardData && e.clipboardData.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {{
-        if (items[i].type.startsWith('image/')) {{
-          e.preventDefault();
-          applyImage(items[i].getAsFile());
-          return;
-        }}
-      }}
-    }});
-
-    // Drag & drop support
-    zone.addEventListener('dragover', function(e) {{
-      e.preventDefault();
-      zone.classList.add('active');
-    }});
-    zone.addEventListener('dragleave', function() {{
-      zone.classList.remove('active');
-    }});
-    zone.addEventListener('drop', function(e) {{
-      e.preventDefault();
-      zone.classList.remove('active');
-      const file = e.dataTransfer.files[0];
-      applyImage(file);
-    }});
-
-    // Click zone to focus (so Cmd+V works)
-    zone.addEventListener('click', function() {{
-      zone.focus();
-      zone.classList.add('active');
-    }});
-    zone.addEventListener('blur', function() {{
-      if (!imgData.value) zone.classList.remove('active');
-    }});
-  }})();
-
-  function clearPaste(e) {{
-    e.stopPropagation();
-    document.getElementById('image_data').value = '';
-    document.getElementById('image_mime').value = '';
-    document.getElementById('paste-preview').style.display = 'none';
-    document.getElementById('paste-clear-btn').style.display = 'none';
-    document.getElementById('paste-label').textContent = '📋 Pega tu capture de Quant Data aquí — Cmd+V';
-    document.getElementById('paste-zone').classList.remove('has-image', 'active');
-  }}
-  </script>
-
+<div class="panel">
+  <h3>Lecciones guardadas ({total_lessons}) — {active_lessons} activas en Claude</h3>
   {lessons_html}
 </div>
 
-<script>setTimeout(() => location.reload(), 30000);</script>
+<!-- Image modal -->
+<div class="modal" id="img-modal" onclick="this.classList.remove('open')">
+  <img id="modal-img" src="">
+</div>
+
+<script>
+(function() {{
+  const zone = document.getElementById('paste-zone');
+  const preview = document.getElementById('paste-preview');
+  const clearBtn = document.getElementById('paste-clear-btn');
+  const labelEl = document.getElementById('paste-label');
+  const imgData = document.getElementById('image_data');
+  const imgMime = document.getElementById('image_mime');
+  const textarea = document.getElementById('lesson_text');
+
+  function applyImage(file) {{
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {{
+      const dataUrl = ev.target.result;
+      imgData.value = dataUrl.split(',')[1];
+      imgMime.value = file.type;
+      preview.src = dataUrl;
+      preview.style.display = 'block';
+      zone.classList.add('has-image');
+      zone.classList.remove('active');
+      clearBtn.style.display = 'block';
+      labelEl.textContent = '✅ Capture listo';
+      textarea.focus();
+    }};
+    reader.readAsDataURL(file);
+  }}
+
+  document.addEventListener('paste', function(e) {{
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {{
+      if (items[i].type.startsWith('image/')) {{
+        e.preventDefault();
+        applyImage(items[i].getAsFile());
+        return;
+      }}
+    }}
+  }});
+
+  zone.addEventListener('dragover', function(e) {{ e.preventDefault(); zone.classList.add('active'); }});
+  zone.addEventListener('dragleave', function() {{ zone.classList.remove('active'); }});
+  zone.addEventListener('drop', function(e) {{
+    e.preventDefault();
+    zone.classList.remove('active');
+    applyImage(e.dataTransfer.files[0]);
+  }});
+  zone.addEventListener('click', function() {{ zone.focus(); zone.classList.add('active'); }});
+  zone.addEventListener('blur', function() {{ if (!imgData.value) zone.classList.remove('active'); }});
+}})();
+
+function clearPaste(e) {{
+  e.stopPropagation();
+  document.getElementById('image_data').value = '';
+  document.getElementById('image_mime').value = '';
+  document.getElementById('paste-preview').style.display = 'none';
+  document.getElementById('paste-clear-btn').style.display = 'none';
+  document.getElementById('paste-label').textContent = '📋 Pega tu capture de Quant Data aquí — Cmd+V · o arrastra la imagen';
+  document.getElementById('paste-zone').classList.remove('has-image', 'active');
+}}
+
+function openModal(id) {{
+  document.getElementById('modal-img').src = '/lesson-image/' + id;
+  document.getElementById('img-modal').classList.add('open');
+}}
+</script>
 </body>
 </html>"""
 
@@ -460,6 +538,7 @@ def _build_lessons(lessons: list) -> str:
         # we add a has_image boolean. For now use a thumbnail endpoint.
         thumb_html = (
             f'<img class="lesson-thumb" src="/lesson-image/{l["id"]}" '
+            f'onclick="openModal({l["id"]})" '
             f'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">'
             f'<div class="lesson-thumb-empty" style="display:none">📷</div>'
         )
@@ -624,7 +703,6 @@ async def handle_index(request):
         prompt_preview_html=_build_prompt_preview(crit_data.get("active_prompt", "")),
         discord_msgs_html=discord_msgs_html,
         log_html=log_html,
-        lessons_html=_build_lessons(all_lessons),
     )
     return web.Response(text=html, content_type="text/html")
 
@@ -674,6 +752,17 @@ async def handle_delete_rule(request):
         cr.delete_rule(rule_id)
         add_log(f"Regla #{rule_id} eliminada")
     raise web.HTTPFound("/")
+
+
+async def handle_lessons_page(request):
+    all_lessons = ls.get_all()
+    active_count = sum(1 for l in all_lessons if l.get("active", True))
+    html = LESSONS_HTML.format(
+        total_lessons=len(all_lessons),
+        active_lessons=active_count,
+        lessons_html=_build_lessons(all_lessons),
+    )
+    return web.Response(text=html, content_type="text/html")
 
 
 async def handle_add_lesson(request):
@@ -827,6 +916,7 @@ def create_app() -> web.Application:
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
     app.router.add_post("/delete-rule", handle_delete_rule)
+    app.router.add_get("/lessons", handle_lessons_page)
     app.router.add_post("/add-lesson", handle_add_lesson)
     app.router.add_get("/confirm-lesson/{temp_id}", handle_confirm_lesson)
     app.router.add_post("/save-lesson", handle_save_lesson)
