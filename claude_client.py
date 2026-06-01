@@ -89,6 +89,75 @@ _Hasta mañana. 💪_
 - Tono: directo, seguro, como Randy hablando a su equipo en Discord"""
 
 
+async def analyze_lesson(
+    image_b64: str,
+    image_type: str,
+    text: str,
+    anthropic_api_key: str,
+) -> dict:
+    """Analyze a lesson submission and extract structured learning from Randy's observation."""
+    system = (
+        "Eres el asistente de análisis de Randy, un trader e instructor de opciones que usa "
+        "DEX y GEX (estructura de opciones 0DTE) para leer el mercado.\n\n"
+        "Randy te enviará una observación de mercado (y posiblemente una imagen de chart). "
+        "Tu trabajo es extraer aprendizaje estructurado.\n\n"
+        "Responde SOLO con JSON válido, sin texto extra:\n"
+        "{\n"
+        '  "regla": "una oración clara y accionable que el bot debe aplicar al generar lecturas",\n'
+        '  "categoria": "DEX" | "GEX" | "Formato" | "Error detectado" | "Ejemplo bueno" | "General",\n'
+        '  "resumen": "1-2 oraciones describiendo qué situación de mercado muestra esta lección",\n'
+        '  "pregunta": "una pregunta específica si necesitas aclarar algo crítico para aplicar la regla, o vacío si está claro"\n'
+        "}\n\n"
+        "La pregunta SOLO si hay ambigüedad real que afecte cómo aplicar la regla. No preguntes por preguntar."
+    )
+
+    content = []
+    if image_b64:
+        content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": image_type or "image/png",
+                "data": image_b64,
+            },
+        })
+    content.append({"type": "text", "text": f"Observación de Randy:\n{text}"})
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 500,
+                "system": system,
+                "messages": [{"role": "user", "content": content}],
+            },
+        ) as resp:
+            if resp.status != 200:
+                return {"regla": text, "categoria": "General", "resumen": "", "pregunta": ""}
+            data = await resp.json()
+            raw = data.get("content", [{}])[0].get("text", "").strip()
+            try:
+                if "```" in raw:
+                    raw = raw.split("```")[1]
+                    if raw.startswith("json"):
+                        raw = raw[4:]
+                result = json.loads(raw.strip())
+                return {
+                    "regla": result.get("regla", text),
+                    "categoria": result.get("categoria", "General"),
+                    "resumen": result.get("resumen", ""),
+                    "pregunta": result.get("pregunta", ""),
+                }
+            except Exception:
+                return {"regla": text, "categoria": "General", "resumen": "", "pregunta": ""}
+
+
 async def refine_rule(raw_text: str, anthropic_api_key: str) -> str:
     """Pass a raw criteria rule through Claude to reformat it clearly."""
     prompt = (
@@ -125,6 +194,7 @@ async def generate_reading(
     anthropic_api_key: str,
     next_time: str,
     tipo: str = "lectura",
+    lessons: list = None,
 ) -> str:
     now_et = datetime.now(ET)
     time_str = now_et.strftime("%I:%M %p")
@@ -157,7 +227,40 @@ async def generate_reading(
 
     criteria_text = criteria.get_active_prompt()
     criteria_section = f"\n\nAJUSTES DE CRITERIO DEL INSTRUCTOR (aplica siempre):\n{criteria_text}" if criteria_text else ""
-    user_message = f"Genera el mensaje para estos datos:\n{json.dumps(input_data, indent=2)}{criteria_section}"
+    data_message = f"Genera el mensaje para estos datos:\n{json.dumps(input_data, indent=2)}{criteria_section}"
+
+    # Build multimodal content — inject active lessons before market data
+    content = []
+    if lessons:
+        content.append({
+            "type": "text",
+            "text": "LECCIONES APRENDIDAS DEL INSTRUCTOR — aplica este conocimiento en la lectura actual:\n",
+        })
+        for i, lesson in enumerate(lessons, 1):
+            img_b64 = lesson.get("image_b64", "")
+            if img_b64:
+                content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": lesson.get("image_type", "image/png"),
+                        "data": img_b64,
+                    },
+                })
+            rule = lesson.get("rule") or lesson.get("text", "")
+            answer_ctx = f"\n  Contexto adicional: {lesson['answer']}" if lesson.get("answer") else ""
+            summary_ctx = f"\n  Situacion: {lesson['summary']}" if lesson.get("summary") else ""
+            content.append({
+                "type": "text",
+                "text": (
+                    f"[Leccion {i} — {lesson.get('category', 'General')}]\n"
+                    f"  Regla: {rule}{summary_ctx}{answer_ctx}\n"
+                ),
+            })
+        content.append({"type": "text", "text": "---\nAhora genera la lectura:\n"})
+    content.append({"type": "text", "text": data_message})
+
+    user_message = content if lessons else data_message
 
     async with aiohttp.ClientSession() as session:
         async with session.post(

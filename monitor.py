@@ -7,6 +7,7 @@ import config_manager
 import qd_client
 import analyzer as ana
 import claude_client
+import lessons as ls
 import notifier
 import dashboard
 import stats
@@ -78,11 +79,16 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str) ->
         return
     dashboard.add_log(f"API key: ...{anthropic_key[-8:]}")
 
+    active_lessons = ls.get_active_lessons()
+    if active_lessons:
+        dashboard.add_log(f"Inyectando {len(active_lessons)} leccion(es) en contexto")
+
     message = await claude_client.generate_reading(
         analysis=analysis,
         anthropic_api_key=anthropic_key,
         next_time=next_time,
         tipo=tipo,
+        lessons=active_lessons if active_lessons else None,
     )
 
     if message:
