@@ -99,9 +99,17 @@ Si tipo = "cierre":
 2-3 líneas de Randy despidiéndose, motivadoras.
 _Hasta mañana. 💪_
 
+━━━ ZONAS VACÍAS — MUY IMPORTANTE ━━━
+- Si zonas_fuertes_abajo está vacío: NO omitas la sección. Escribe:
+  🟢 **Zonas Fuertes Abajo**
+  ⚠️ Sin zonas de soporte definidas — cuidado si el precio cae, no hay piso claro en el rango cercano
+- Si zonas_fuertes_arriba está vacío: NO omitas la sección. Escribe:
+  🔴 **Zonas Fuertes Arriba**
+  ⚠️ Sin zonas de resistencia definidas — el precio puede subir sin techo claro en el rango cercano
+- Nunca silencies una sección vacía, el alumno necesita saber que no hay estructura
+
 ━━━ REGLAS GENERALES ━━━
 - Precios sin decimales ($556 no $556.00)
-- Si no hay zonas fuertes arriba, omite esa sección
 - Tono: directo, seguro, como Randy hablando a su equipo en Discord
 - Nunca más de 2 zonas arriba y 2 abajo"""
 
