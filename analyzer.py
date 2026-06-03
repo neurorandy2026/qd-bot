@@ -23,6 +23,7 @@ DEX_SOLID_MAX = 10e9
 DEX_MAGNETIC_MIN = 2.5e9
 GEX_STABLE_MIN = 800e6
 GEX_RED_MAX = -1e9
+GEX_WALL_MIN = 2e9      # $2B+ = GEX wall (volatility anchor)
 STRIKE_RANGE = 20  # strikes to analyze around current price
 
 
@@ -83,6 +84,55 @@ def _detect_magnetic_zones(sorted_levels: list) -> list:
                 continue
         i += 1
     return zones
+
+
+def _find_gex_flip(levels: list, price: float) -> Optional[dict]:
+    """
+    Find the GEX flip point — where GEX changes sign near the price.
+
+    Above flip: aggregate GEX positive → MM long gamma → dampens moves (controlled)
+    Below flip: aggregate GEX negative → MM short gamma → amplifies moves (volatile)
+
+    This is the most critical pivot of the day.
+    Returns the closest sign-change to current price.
+    """
+    sorted_levels = sorted(levels, key=lambda x: x["strike"])
+    flips = []
+    for i in range(len(sorted_levels) - 1):
+        a = sorted_levels[i]
+        b = sorted_levels[i + 1]
+        if a["gex_net"] == 0 or b["gex_net"] == 0:
+            continue
+        if (a["gex_net"] > 0) != (b["gex_net"] > 0):
+            flip_strike = round((a["strike"] + b["strike"]) / 2, 1)
+            flips.append({
+                "strike": flip_strike,
+                "price_above_flip": price > flip_strike,
+                "distance": flip_strike - price,
+            })
+
+    if not flips:
+        return None
+    return min(flips, key=lambda x: abs(x["distance"]))
+
+
+def _find_gex_walls(levels: list, price: float) -> list:
+    """
+    Find GEX walls — strikes with GEX > $2B.
+    These are volatility anchors: price gravitates toward them and
+    tends to stall or consolidate near these levels.
+    MM has maximum exposure here — they actively defend these strikes.
+    """
+    walls = []
+    for level in levels:
+        if level["gex_net"] >= GEX_WALL_MIN:
+            walls.append({
+                "strike": level["strike"],
+                "gex_b": round(level["gex_net"] / 1e9, 2),
+                "side": "arriba" if level["strike"] > price else "abajo",
+                "distance": round(level["strike"] - price, 1),
+            })
+    return sorted(walls, key=lambda x: abs(x["distance"]))[:3]
 
 
 def _calculate_sesgo(levels: list, price: float) -> dict:
@@ -217,8 +267,10 @@ def analyze(market_data: dict) -> dict:
     supports.sort(key=lambda x: x["strike"], reverse=True)    # closest first going down
     resistances.sort(key=lambda x: x["strike"])               # closest first going up
 
-    sesgo       = _calculate_sesgo(levels, price)
+    sesgo         = _calculate_sesgo(levels, price)
     zonas_fuertes = _rank_zonas_fuertes(supports, resistances, magnetic_zones)
+    gex_flip      = _find_gex_flip(levels, price)
+    gex_walls     = _find_gex_walls(levels, price)
 
     return {
         "ticker": market_data["ticker"],
@@ -230,6 +282,8 @@ def analyze(market_data: dict) -> dict:
         "magnetic_zones": magnetic_zones,
         "sesgo": sesgo,
         "zonas_fuertes": zonas_fuertes,
+        "gex_flip": gex_flip,
+        "gex_walls": gex_walls,
     }
 
 

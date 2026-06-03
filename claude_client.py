@@ -63,6 +63,8 @@ Si tipo = "apertura":
 `$XXX` · descripción corta
 `$XXX` · descripción corta
 
+🔀 **Pivote del día: $XXX** — [por encima controlado / por debajo puede acelerar]
+🧲 **Muro $XXX** — [ancla/imán] [solo si hay gex_wall dentro de $10] (omitir si no aplica)
 ⚠️ [solo si hay nivel "cuidado" o gex "rojo" — omitir si no aplica]
 🔄 *Próxima lectura: {NEXT_TIME} ET*
 
@@ -80,6 +82,8 @@ Sin saludo, directo:
 `$XXX` · descripción corta
 `$XXX` · descripción corta
 
+🔀 **Pivote del día: $XXX** — [por encima controlado / por debajo puede acelerar]
+🧲 **Muro $XXX** — [ancla/imán] (omitir si no aplica)
 ⚠️ [solo si aplica]
 🔄 *Próxima lectura: {NEXT_TIME} ET*
 
@@ -95,9 +99,26 @@ Si tipo = "cierre":
 `$XXX` · descripción corta
 `$XXX` · descripción corta
 
+🔀 **Pivote: $XXX** — [cerró por encima/debajo del pivote]
 📌 **Resumen:** una oración sobre cómo cerró el día
 2-3 líneas de Randy despidiéndose, motivadoras.
 _Hasta mañana. 💪_
+
+━━━ GEX FLIP — PIVOTE DEL DÍA ━━━
+- gex_flip es el nivel donde el ambiente de mercado cambia de controlado a volátil
+- Si precio > gex_flip.strike (price_above_flip=true): movimiento controlado, estructurado
+- Si precio < gex_flip.strike (price_above_flip=false): el mercado puede acelerar, movimientos más bruscos
+- SIEMPRE mencionar el flip si existe, es el dato más importante del día para el contexto
+- Formato: "🔀 **Pivote del día: $XXX** — [por encima: movimiento controlado / por debajo: puede acelerar]"
+- Si el precio está cerca del flip (< $2 de distancia): advertir que está en zona de transición
+
+━━━ GEX WALLS — MUROS DE VOLATILIDAD ━━━
+- gex_walls son niveles con GEX > $2B donde el precio tiende a frenarse y consolidar
+- El precio gravita hacia estos muros cuando están cerca
+- Si hay un muro arriba: mencionar que puede actuar como imán/techo de volatilidad
+- Si hay un muro abajo: mencionar que puede actuar como ancla/piso de volatilidad
+- Formato: "🧲 **Muro $XXX** — [ancla / imán] [arriba/abajo]"
+- Solo mencionar si está dentro de $10 del precio actual
 
 ━━━ ZONAS VACÍAS — MUY IMPORTANTE ━━━
 - Si zonas_fuertes_abajo está vacío: NO omitas la sección. Escribe:
@@ -253,6 +274,8 @@ async def generate_reading(
         "magnetic_zones": analysis.get("magnetic_zones", []),
         "supports": [_fmt_zona(s) for s in analysis.get("supports", [])[:3]],
         "resistances": [_fmt_zona(r) for r in analysis.get("resistances", [])[:2]],
+        "gex_flip": analysis.get("gex_flip"),
+        "gex_walls": analysis.get("gex_walls", []),
     }
 
     criteria_text = criteria.get_active_prompt()
