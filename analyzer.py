@@ -85,6 +85,93 @@ def _detect_magnetic_zones(sorted_levels: list) -> list:
     return zones
 
 
+def _calculate_sesgo(levels: list, price: float) -> dict:
+    """
+    Calculates directional bias from DEX/GEX structure.
+
+    Logic:
+    - DEX balance: total positive DEX below price vs total negative DEX above
+    - GEX near price: positive = controlled move, negative = can accelerate
+    - Ratio >= 1.5 → ALCISTA, <= 0.67 → BAJISTA, else NEUTRAL
+    """
+    below = [l for l in levels if l["strike"] < price]
+    above = [l for l in levels if l["strike"] > price]
+
+    dex_support_total  = sum(l["dex_net"] for l in below if l["dex_net"] > 0)
+    dex_resist_total   = abs(sum(l["dex_net"] for l in above if l["dex_net"] < 0))
+
+    # GEX within 5 strikes of price
+    near = [l for l in levels if abs(l["strike"] - price) <= 5]
+    gex_near = sum(l["gex_net"] for l in near)
+
+    ratio = dex_support_total / max(dex_resist_total, 1e8)
+
+    if ratio >= 1.5:
+        sesgo = "ALCISTA"
+    elif ratio <= 0.67:
+        sesgo = "BAJISTA"
+    else:
+        sesgo = "NEUTRAL"
+
+    diff = abs(ratio - 1.0)
+    strength = "FUERTE" if diff >= 0.8 else "MODERADO" if diff >= 0.35 else "DEBIL"
+
+    if gex_near > 2e9:
+        gex_context = "GEX positivo cerca del precio — movimiento controlado"
+    elif gex_near < -1e9:
+        gex_context = "GEX negativo cerca del precio — movimiento puede acelerar"
+    else:
+        gex_context = ""
+
+    return {
+        "sesgo": sesgo,
+        "strength": strength,
+        "dex_support_b": round(dex_support_total / 1e9, 1),
+        "dex_resist_b": round(dex_resist_total / 1e9, 1),
+        "gex_context": gex_context,
+    }
+
+
+def _rank_zonas_fuertes(supports: list, resistances: list, magnetic_zones: list) -> dict:
+    """
+    Ranks supports and resistances by composite strength score.
+    Returns top 2 of each — Randy uses these for vertical spread protection.
+
+    Score factors:
+    - DEX magnitude (base)
+    - GEX stable (+30%) → zone is held with controlled movement
+    - GEX red    (-15%) → zone may not hold if broken
+    - Magnetic zone (+40%) → MM actively pushes price to this level
+    - cuidado signal (+10%) → very large DEX, MM must defend
+    """
+    magnetic_strikes = {s for z in magnetic_zones for s in z["strikes"]}
+
+    def score(level: dict) -> float:
+        base = abs(level["dex_net"])
+        gex = level.get("gex_signal")
+        if gex in ("estable", "muy_estable"):
+            base *= 1.30
+        elif gex == "rojo":
+            base *= 0.85
+        if level["strike"] in magnetic_strikes:
+            base *= 1.40
+        if level.get("dex_signal") in ("cuidado", "resistencia_cuidado"):
+            base *= 1.10
+        return base
+
+    top_supports    = sorted(supports,    key=score, reverse=True)[:2]
+    top_resistances = sorted(resistances, key=score, reverse=True)[:2]
+
+    # Re-sort by strike for display (closest first)
+    top_supports.sort(key=lambda x: x["strike"], reverse=True)
+    top_resistances.sort(key=lambda x: x["strike"])
+
+    return {
+        "top_supports":    top_supports,
+        "top_resistances": top_resistances,
+    }
+
+
 def analyze(market_data: dict) -> dict:
     """
     Takes raw market data and returns classified analysis.
@@ -130,6 +217,9 @@ def analyze(market_data: dict) -> dict:
     supports.sort(key=lambda x: x["strike"], reverse=True)    # closest first going down
     resistances.sort(key=lambda x: x["strike"])               # closest first going up
 
+    sesgo       = _calculate_sesgo(levels, price)
+    zonas_fuertes = _rank_zonas_fuertes(supports, resistances, magnetic_zones)
+
     return {
         "ticker": market_data["ticker"],
         "price": price,
@@ -138,6 +228,8 @@ def analyze(market_data: dict) -> dict:
         "supports": supports[:5],
         "resistances": resistances[:3],
         "magnetic_zones": magnetic_zones,
+        "sesgo": sesgo,
+        "zonas_fuertes": zonas_fuertes,
     }
 
 

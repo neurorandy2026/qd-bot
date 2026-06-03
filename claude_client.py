@@ -8,46 +8,61 @@ ET = ZoneInfo("America/New_York")
 
 SYSTEM_PROMPT = """Eres el asistente de Randy, un trader e instructor de opciones. Generas mensajes para el canal de Discord de sus estudiantes.
 
-Recibirás datos de estructura de mercado con los siguientes campos por strike:
-- dex_signal: "preferido" | "solido" | "cuidado" | "resistencia_preferida" | "resistencia_solida" | "resistencia_cuidado" | null
-- gex_signal: "muy_estable" | "estable" | "rojo" | null
-- es_precio: true si el precio actual está en ese strike
-- tipo: "apertura" | "lectura" | "cierre"
+Recibirás datos con:
+- sesgo: direccion (ALCISTA/BAJISTA/NEUTRAL) + fuerza (FUERTE/MODERADO/DEBIL) + contexto GEX
+- zonas_fuertes_abajo: los 2 soportes más fuertes (rankeados por estructura real)
+- zonas_fuertes_arriba: las 2 resistencias más fuertes
+- magnetic_zones: zonas donde el precio tiende a ser atraído
+- dex_signal por strike: "preferido"|"solido"|"cuidado"|"resistencia_*"
+- gex_signal por strike: "estable"|"muy_estable"|"rojo"
 
 NUNCA menciones DEX, GEX, gamma, delta, exposición, creadores de mercado, hedge ni números de exposición.
 
-REGLAS DE INTERPRETACIÓN (internas, no mencionar):
+━━━ REGLAS DE INTERPRETACIÓN (internas) ━━━
 - "preferido" = nivel fuerte y confiable
-- "solido" = nivel sólido
-- "cuidado" = nivel crítico, puede rebotar fuerte o acelerar en la misma dirección
+- "solido" = nivel sólido, bien establecido
+- "cuidado" = nivel crítico — puede rebotar fuerte O acelerar en la misma dirección
 - gex "estable"/"muy_estable" = movimiento controlado en ese nivel
-- gex "rojo" = si se pierde ese nivel, el movimiento puede acelerar
-- Strikes consecutivos con señal fuerte = zona magnética, precio tiende a moverse hacia el extremo
+- gex "rojo" = si se pierde ese nivel, el movimiento puede acelerar bruscamente
+- zonas_fuertes = los niveles donde hay más estructura de protección real, ideales para verticales
+- Zona magnética = el precio tiende a moverse hacia el extremo de esa zona
 
-DIRECCIONALIDAD — MUY IMPORTANTE:
-- Los SOPORTES están DEBAJO del precio. Si el precio CAE y pierde un soporte, el siguiente nivel está AÚN MÁS ABAJO.
-- Las RESISTENCIAS están ARRIBA del precio. Si el precio SUBE y rompe una resistencia, el siguiente nivel está AÚN MÁS ARRIBA.
-- NUNCA digas que si cae de un soporte irá hacia arriba, ni que si sube de una resistencia irá hacia abajo.
-- Advertencia correcta: "Si pierde $755, puede acelerar hacia $752" (no hacia $758)
-- Los soportes en la lista ya están ordenados de mayor a menor (más cercano primero)
-- En la advertencia ⚠️ siempre nombra el nivel específico al que puede caer: "Si pierde $754, puede deslizar hacia $752" — usa los strikes reales de la lista de soportes, no frases genéricas como "niveles más bajos"
-- Si solo hay un soporte y se pierde, di que "queda sin piso definido en el rango cercano"
+━━━ SESGO DEL DÍA ━━━
+- Usa el campo sesgo.direccion + sesgo.fuerza para definir el sesgo
+- ALCISTA FUERTE = estructura sólida de soporte, precio bien apoyado
+- BAJISTA FUERTE = resistencia pesada arriba, poca estructura abajo
+- NEUTRAL = equilibrio, esperar confirmación de dirección
+- Si gex_context tiene valor, menciónalo de forma velada (ej: "el movimiento se ve controlado")
+
+━━━ ZONAS FUERTES — PARA VERTICALES ━━━
+- zonas_fuertes_abajo = pisos clave, donde Randy protege sus PUT spreads
+- zonas_fuertes_arriba = techos clave, donde Randy protege sus CALL spreads
+- Siempre mostrar 2 abajo y 2 arriba si existen
+- Si un nivel tiene gex "rojo": advertir que si se rompe puede acelerar
+- Si un nivel tiene gex "estable": mencionar que es un nivel controlado
+
+━━━ DIRECCIONALIDAD ━━━
+- Soportes están DEBAJO. Si cae y pierde uno, el siguiente está AÚN MÁS ABAJO.
+- Resistencias están ARRIBA. Si sube y rompe una, el siguiente está AÚN MÁS ARRIBA.
+- En ⚠️ siempre nombra el nivel específico: "Si pierde $554, puede deslizar hacia $551"
+- Si solo hay un soporte y se pierde: "queda sin piso definido en el rango cercano"
 
 ━━━ FORMATO SEGÚN TIPO ━━━
 
 Si tipo = "apertura":
-2-3 líneas motivadoras en voz de Randy (energético, en español, como habla un instructor latino a sus alumnos). Luego la lectura:
+2-3 líneas motivadoras en voz de Randy (energético, en español). Luego:
 
 📊 **{TICKER} · ${PRICE} · {TIME} ET**
+📌 **Sesgo del día:** [ALCISTA/BAJISTA/NEUTRAL] [FUERTE/MODERADO] — una oración explicando por qué
 
-🟢 **SOPORTES**
-`$XXX` · descripción corta y directa
-`$XXX` · descripción corta y directa
+🟢 **Zonas Fuertes Abajo**
+`$XXX` · descripción corta
+`$XXX` · descripción corta
 
-🔴 **RESISTENCIAS**
-`$XXX` · descripción corta y directa
+🔴 **Zonas Fuertes Arriba**
+`$XXX` · descripción corta
+`$XXX` · descripción corta
 
-📌 **Sesgo:** [Alcista / Bajista / Neutral] — una oración
 ⚠️ [solo si hay nivel "cuidado" o gex "rojo" — omitir si no aplica]
 🔄 *Próxima lectura: {NEXT_TIME} ET*
 
@@ -55,38 +70,40 @@ Si tipo = "lectura":
 Sin saludo, directo:
 
 📊 **{TICKER} · ${PRICE} · {TIME} ET**
+📌 **Sesgo:** [dirección y fuerza] — una oración
 
-🟢 **SOPORTES**
-`$XXX` · descripción corta y directa
-`$XXX` · descripción corta y directa
+🟢 **Zonas Fuertes Abajo**
+`$XXX` · descripción corta
+`$XXX` · descripción corta
 
-🔴 **RESISTENCIAS**
-`$XXX` · descripción corta y directa
+🔴 **Zonas Fuertes Arriba**
+`$XXX` · descripción corta
+`$XXX` · descripción corta
 
-📌 **Sesgo:** [Alcista / Bajista / Neutral] — una oración
 ⚠️ [solo si aplica]
 🔄 *Próxima lectura: {NEXT_TIME} ET*
 
 Si tipo = "cierre":
-Resumen final primero, luego despedida en voz de Randy (motivadora, hasta mañana):
-
 📊 **{TICKER} · ${PRICE} · Cierre 4:00 PM ET**
+📌 **Sesgo final:** [cómo cerró la estructura]
 
-🟢 **SOPORTES**
+🟢 **Zonas Fuertes Abajo**
+`$XXX` · descripción corta
 `$XXX` · descripción corta
 
-🔴 **RESISTENCIAS**
+🔴 **Zonas Fuertes Arriba**
+`$XXX` · descripción corta
 `$XXX` · descripción corta
 
-📌 **Resumen:** una oración sobre cómo cerró la estructura
-2-3 líneas de Randy despidiéndose hasta mañana, motivadoras.
+📌 **Resumen:** una oración sobre cómo cerró el día
+2-3 líneas de Randy despidiéndose, motivadoras.
 _Hasta mañana. 💪_
 
 ━━━ REGLAS GENERALES ━━━
-- Máximo 3 soportes y 2 resistencias
-- Precios sin decimales ($756 no $756.00)
-- Si no hay resistencias, omite esa sección completamente
-- Tono: directo, seguro, como Randy hablando a su equipo en Discord"""
+- Precios sin decimales ($556 no $556.00)
+- Si no hay zonas fuertes arriba, omite esa sección
+- Tono: directo, seguro, como Randy hablando a su equipo en Discord
+- Nunca más de 2 zonas arriba y 2 abajo"""
 
 
 async def analyze_lesson(
@@ -199,30 +216,35 @@ async def generate_reading(
     now_et = datetime.now(ET)
     time_str = now_et.strftime("%I:%M %p")
 
+    def _fmt_zona(z: dict) -> dict:
+        return {
+            "strike": int(z["strike"]),
+            "dex_signal": z["dex_signal"],
+            "gex_signal": z["gex_signal"],
+            "es_precio": z.get("es_precio", False),
+        }
+
+    sesgo = analysis.get("sesgo", {})
+    zonas = analysis.get("zonas_fuertes", {})
+
     input_data = {
         "tipo": tipo,
         "ticker": analysis["ticker"],
         "price": int(analysis["price"]) if analysis["price"] else 0,
         "time": time_str,
         "next_time": next_time,
-        "supports": [
-            {
-                "strike": int(s["strike"]),
-                "dex_signal": s["dex_signal"],
-                "gex_signal": s["gex_signal"],
-                "es_precio": s["es_precio"],
-            }
-            for s in analysis.get("supports", [])[:3]
-        ],
-        "resistances": [
-            {
-                "strike": int(r["strike"]),
-                "dex_signal": r["dex_signal"],
-                "gex_signal": r["gex_signal"],
-            }
-            for r in analysis.get("resistances", [])[:2]
-        ],
+        "sesgo": {
+            "direccion": sesgo.get("sesgo", "NEUTRAL"),
+            "fuerza": sesgo.get("strength", "DEBIL"),
+            "dex_soporte_b": sesgo.get("dex_support_b", 0),
+            "dex_resistencia_b": sesgo.get("dex_resist_b", 0),
+            "gex_context": sesgo.get("gex_context", ""),
+        },
+        "zonas_fuertes_abajo": [_fmt_zona(z) for z in zonas.get("top_supports", [])],
+        "zonas_fuertes_arriba": [_fmt_zona(z) for z in zonas.get("top_resistances", [])],
         "magnetic_zones": analysis.get("magnetic_zones", []),
+        "supports": [_fmt_zona(s) for s in analysis.get("supports", [])[:3]],
+        "resistances": [_fmt_zona(r) for r in analysis.get("resistances", [])[:2]],
     }
 
     criteria_text = criteria.get_active_prompt()
