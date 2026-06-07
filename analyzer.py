@@ -91,6 +91,30 @@ def _detect_magnetic_zones(sorted_levels: list, max_gap: float = 1.5,
     return zones
 
 
+def _find_dex_flip(levels: list, price: float) -> Optional[dict]:
+    """MVC: strike donde la exposición delta neta de los MMs cruza cero.
+    Sobre el flip → MMs compran para cubrirse (soporte estructural).
+    Bajo el flip  → MMs venden para cubrirse (presión bajista estructural).
+    """
+    sorted_levels = sorted(levels, key=lambda x: x["strike"])
+    flips = []
+    for i in range(len(sorted_levels) - 1):
+        a = sorted_levels[i]
+        b = sorted_levels[i + 1]
+        if a["dex_net"] == 0 or b["dex_net"] == 0:
+            continue
+        if (a["dex_net"] > 0) != (b["dex_net"] > 0):
+            flip_strike = round((a["strike"] + b["strike"]) / 2, 1)
+            flips.append({
+                "strike": flip_strike,
+                "price_above_flip": price > flip_strike,
+                "distance": flip_strike - price,
+            })
+    if not flips:
+        return None
+    return min(flips, key=lambda x: abs(x["distance"]))
+
+
 def _find_gex_flip(levels: list, price: float) -> Optional[dict]:
     sorted_levels = sorted(levels, key=lambda x: x["strike"])
     flips = []
@@ -247,6 +271,7 @@ def analyze(market_data: dict) -> dict:
     sesgo         = _calculate_sesgo(levels, price, scale=scale, gex_near_range=gex_near_r)
     zonas_fuertes = _rank_zonas_fuertes(supports, resistances, magnetic_zones)
     gex_flip      = _find_gex_flip(levels, price)
+    dex_flip      = _find_dex_flip(levels, price)
     gex_walls     = _find_gex_walls(levels, price, wall_min=GEX_WALL_MIN * scale)
 
     return {
@@ -260,6 +285,7 @@ def analyze(market_data: dict) -> dict:
         "sesgo":          sesgo,
         "zonas_fuertes":  zonas_fuertes,
         "gex_flip":       gex_flip,
+        "dex_flip":       dex_flip,
         "gex_walls":      gex_walls,
     }
 

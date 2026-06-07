@@ -406,7 +406,21 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <script>
-setTimeout(() => location.reload(), 5000);
+// Auto-refresh — se pausa si el usuario está escribiendo en cualquier input
+(function() {{
+  let timer;
+  function scheduleReload() {{
+    clearTimeout(timer);
+    timer = setTimeout(() => location.reload(), 5000);
+  }}
+  scheduleReload();
+  document.addEventListener('focusin', function(e) {{
+    if (e.target.matches('input, textarea, select')) clearTimeout(timer);
+  }});
+  document.addEventListener('focusout', function(e) {{
+    if (e.target.matches('input, textarea, select')) scheduleReload();
+  }});
+}})();
 // Mobile: tap ? to toggle tooltip
 document.addEventListener('click', function(e) {{
   const tip = e.target.closest('.tip');
@@ -1015,8 +1029,9 @@ async def handle_ask(request):
                     "price": market_data.get("price"),
                     "sesgo": sesgo.get("sesgo", "NEUTRAL"),
                     "fuerza": sesgo.get("strength", ""),
-                    "gamma_flip_mvc": int(gex_flip["strike"]) if gex_flip else None,
-                    "precio_sobre_mvc": gex_flip.get("price_above_flip") if gex_flip else None,
+                    "mvc": int(dex_flip["strike"]) if dex_flip else None,
+                    "precio_sobre_mvc": dex_flip.get("price_above_flip") if dex_flip else None,
+                    "gamma_flip_pivote": int(gex_flip["strike"]) if gex_flip else None,
                     "soportes_clave": [int(z["strike"]) for z in zonas.get("top_supports", [])],
                     "resistencias_clave": [int(z["strike"]) for z in zonas.get("top_resistances", [])],
                 })
