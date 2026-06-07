@@ -26,6 +26,7 @@ _defaults = {
     "active_levels": {},   # {ticker: [{"strike": x, "type": "support"|"resistance", "ts": ...}]}
     "history": [],         # last 50 outcomes
     "darkpool_history": [], # last 100 dark pool alerts
+    "questions_log": [],   # last 200 preguntas al bot con respuesta
 }
 
 
@@ -134,6 +135,19 @@ def record_darkpool_alert(ticker: str, notional_m: float, side: str, n_prints: i
     }
     data.setdefault("darkpool_history", []).insert(0, entry)
     data["darkpool_history"] = data["darkpool_history"][:100]
+    _save(data)
+
+
+def record_question(question: str, answer: str):
+    data = _load()
+    entry = {
+        "time": datetime.now(ET).strftime("%I:%M %p ET"),
+        "date": date.today().isoformat(),
+        "question": question,
+        "answer": answer,
+    }
+    data.setdefault("questions_log", []).insert(0, entry)
+    data["questions_log"] = data["questions_log"][:200]
     _save(data)
 
 

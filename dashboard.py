@@ -2,7 +2,7 @@ import asyncio
 import base64
 import uuid
 from aiohttp import web
-from datetime import datetime
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 import stats as st
 import criteria as cr
@@ -424,6 +424,70 @@ document.addEventListener('click', function(e) {{
   if (!wasOpen) tip.classList.add('open');
   e.stopPropagation();
 }});
+</script>
+</body>
+</html>"""
+
+
+QUESTIONS_LOG_HTML = """<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preguntas al Bot</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9;
+          min-height: 100vh; padding: 24px 20px; max-width: 800px; margin: 0 auto; }}
+  h1 {{ font-size: 1.3em; color: #58a6ff; margin-bottom: 4px; font-weight: 700; }}
+  .subtitle {{ color: #8b949e; font-size: 0.82em; margin-bottom: 24px; }}
+  .back-link {{ display: inline-block; color: #8b949e; font-size: 0.82em;
+                margin-bottom: 18px; text-decoration: none; }}
+  .back-link:hover {{ color: #58a6ff; }}
+  .auth-box {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+               padding: 28px; max-width: 340px; margin: 60px auto; text-align: center; }}
+  .auth-box h2 {{ color: #58a6ff; font-size: 1.1em; margin-bottom: 16px; }}
+  .auth-box input {{ width: 100%; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 8px; color: #c9d1d9; padding: 11px 14px; font-size: 1em;
+    font-family: inherit; text-align: center; letter-spacing: 4px; margin-bottom: 12px; outline: none; }}
+  .auth-box input:focus {{ border-color: #58a6ff; }}
+  .auth-box button {{ width: 100%; background: #1f6feb; color: #fff; border: none;
+    padding: 11px; border-radius: 8px; font-size: 0.92em; font-weight: 700;
+    cursor: pointer; font-family: inherit; }}
+  .error {{ color: #f85149; font-size: 0.82em; margin-top: 8px; }}
+  .stats-bar {{ display: flex; gap: 20px; background: #161b22; border: 1px solid #30363d;
+                border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; flex-wrap: wrap; }}
+  .stat {{ text-align: center; }}
+  .stat .n {{ font-size: 1.6em; font-weight: 700; color: #58a6ff; }}
+  .stat .l {{ font-size: 0.72em; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }}
+  .q-card {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+              padding: 14px 16px; margin-bottom: 10px; }}
+  .q-meta {{ font-size: 0.72em; color: #8b949e; margin-bottom: 8px; }}
+  .q-text {{ font-size: 0.9em; color: #f0f6fc; font-weight: 600; margin-bottom: 8px; }}
+  .q-answer {{ font-size: 0.83em; color: #8b949e; line-height: 1.55;
+               border-left: 2px solid #30363d; padding-left: 10px; }}
+  .filter-row {{ display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }}
+  .filter-row input {{ flex: 1; min-width: 160px; background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; color: #c9d1d9; padding: 8px 12px; font-size: 0.85em; font-family: inherit; outline: none; }}
+  .filter-row input:focus {{ border-color: #58a6ff; }}
+  .count {{ color: #8b949e; font-size: 0.82em; }}
+  .empty {{ color: #8b949e; text-align: center; padding: 40px; font-size: 0.9em; }}
+</style>
+</head>
+<body>
+<a class="back-link" href="/">← Dashboard</a>
+<h1>🔍 Preguntas al Bot</h1>
+<p class="subtitle">Solo visible para Randy · {total} preguntas registradas</p>
+
+{content}
+
+<script>
+function filterQ() {{
+  const q = document.getElementById('search').value.toLowerCase();
+  document.querySelectorAll('.q-card').forEach(card => {{
+    card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none';
+  }});
+}}
 </script>
 </body>
 </html>"""
@@ -1151,6 +1215,7 @@ async def handle_ask(request):
         try:
             answer = await claude_client.answer_market_question(question, context, _anthropic_key)
             _last_ask = {"question": question, "answer": answer, "time": now_str}
+            st.record_question(question, answer)
             add_log("Consulta respondida ✅")
         except Exception as e:
             answer = "Algo salió mal al consultar. Intenta de nuevo."
@@ -1158,6 +1223,70 @@ async def handle_ask(request):
 
     return web.Response(text=_render_ask_page(question, answer, now_str),
                         content_type="text/html")
+
+
+async def handle_questions_page(request):
+    """GET /preguntas — muestra formulario de contraseña."""
+    content = """
+    <div class="auth-box">
+      <h2>🔒 Acceso Restringido</h2>
+      <form method="POST" action="/preguntas">
+        <input type="password" name="pwd" placeholder="••••" autofocus style="letter-spacing:0.3em;font-size:1.4rem;width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#1a1a1a;color:#fff;text-align:center;margin-bottom:12px;">
+        <button type="submit" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:1rem;cursor:pointer;">Entrar</button>
+      </form>
+    </div>"""
+    html = QUESTIONS_LOG_HTML.format(total=0, content=content)
+    return web.Response(text=html, content_type="text/html")
+
+
+async def handle_questions_auth(request):
+    """POST /preguntas — valida contraseña y muestra log de preguntas."""
+    data = await request.post()
+    if data.get("pwd", "") != RULES_PASSWORD:
+        content = """
+    <div class="auth-box">
+      <h2>🔒 Contraseña incorrecta</h2>
+      <form method="POST" action="/preguntas">
+        <input type="password" name="pwd" placeholder="••••" autofocus style="letter-spacing:0.3em;font-size:1.4rem;width:100%;padding:10px;border:1px solid #c00;border-radius:6px;background:#1a1a1a;color:#fff;text-align:center;margin-bottom:12px;">
+        <button type="submit" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:1rem;cursor:pointer;">Entrar</button>
+      </form>
+    </div>"""
+        html = QUESTIONS_LOG_HTML.format(total=0, content=content)
+        return web.Response(text=html, content_type="text/html")
+
+    questions = st.get().get("questions_log", [])
+    today_str = date.today().isoformat()
+    today_count = sum(1 for q in questions if q.get("date") == today_str)
+
+    cards_html = ""
+    if not questions:
+        cards_html = "<p style='color:#666;text-align:center;margin-top:40px;'>Aún no hay preguntas registradas.</p>"
+    else:
+        for q in questions:
+            question_text = q.get("question", "")
+            answer_text = q.get("answer", "")
+            time_str = q.get("time", "")
+            date_str = q.get("date", "")
+            cards_html += f"""
+        <div class="q-card">
+          <div class="q-meta">{date_str} · {time_str}</div>
+          <div class="q-text">❓ {question_text}</div>
+          <div class="q-answer">💬 {answer_text}</div>
+        </div>"""
+
+    content = f"""
+    <div class="stats-bar">
+      <div class="stat"><div class="n">{len(questions)}</div><div class="l">Total</div></div>
+      <div class="stat"><div class="n">{today_count}</div><div class="l">Hoy</div></div>
+    </div>
+    <input type="text" id="search" placeholder="Filtrar preguntas..." oninput="filterQ()"
+      style="width:100%;padding:8px 12px;margin-bottom:16px;border:1px solid #333;border-radius:6px;background:#1a1a1a;color:#fff;font-size:0.9rem;">
+    <div id="q-list">
+      {cards_html}
+    </div>"""
+
+    html = QUESTIONS_LOG_HTML.format(total=len(questions), content=content)
+    return web.Response(text=html, content_type="text/html")
 
 
 async def handle_add_rule(request):
@@ -1365,6 +1494,8 @@ def create_app() -> web.Application:
     app.router.add_post("/reset-accuracy", handle_reset_accuracy)
     app.router.add_get("/ask", handle_ask_page)
     app.router.add_post("/ask", handle_ask)
+    app.router.add_get("/preguntas", handle_questions_page)
+    app.router.add_post("/preguntas", handle_questions_auth)
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
     app.router.add_post("/delete-rule", handle_delete_rule)
