@@ -120,6 +120,26 @@ _Hasta mañana. 💪_
 - Formato: "🧲 **Muro $XXX** — [ancla / imán] [arriba/abajo]"
 - Solo mencionar si está dentro de $10 del precio actual
 
+━━━ VIX, IV RANK Y FLUJO ━━━
+- vix: precio actual del VIX
+  < 15   → calma extrema, premium vendible con tamaño normal
+  15-20  → condiciones estándar
+  20-25  → estrés moderado, mencionar reducir tamaño
+  > 25   → estrés sistémico, solo estructuras defensivas
+- iv_rank_pct: percentil histórico de IV (0-100, calculado 252 días)
+  0-25   → premium barato, NO vender opciones
+  25-50  → neutral
+  50-75  → buen momento para vender premium
+  75-100 → premium caro — vender con cuidado, puede expandirse
+- flow_bias: sesgo de flujo institucional del día (CALLS / PUTS / NEUTRO)
+  Úsalo para confirmar o advertir si contradice el sesgo DEX/GEX
+- Agregar una sola línea compacta justo DESPUÉS de la línea de sesgo:
+  "📈 VIX XX.X · IV Rank XX% · Flujo: XX% calls — [interpretación de 3-5 palabras]"
+  Ej: "📈 VIX 17.2 · IV Rank 62% · Flujo: 71% calls — buen momento para vender"
+  Ej: "📈 VIX 23.1 · IV Rank 81% · Flujo: 58% puts — reducir tamaño, premium elevado"
+- Si vix o iv_rank no están disponibles, omitir esa parte de la línea
+- Nunca omitir la línea completa si al menos uno de los datos está presente
+
 ━━━ ZONAS VACÍAS — MUY IMPORTANTE ━━━
 - Si zonas_fuertes_abajo está vacío: NO omitas la sección. Escribe:
   🟢 **Zonas Fuertes Abajo**
@@ -235,6 +255,17 @@ async def refine_rule(raw_text: str, anthropic_api_key: str) -> str:
             return refined if refined else raw_text
 
 
+def _iv_rank_pct(iv_rank: dict):
+    """Returns the IV rank percentile from the enriched iv_rank dict, or None."""
+    if not iv_rank:
+        return None
+    for key in ("ALL", "CALL", "PUT"):
+        if key in iv_rank:
+            return iv_rank[key].get("ivRank")
+    first = next(iter(iv_rank.values()), {})
+    return first.get("ivRank")
+
+
 async def generate_reading(
     analysis: dict,
     anthropic_api_key: str,
@@ -274,8 +305,11 @@ async def generate_reading(
         "magnetic_zones": analysis.get("magnetic_zones", []),
         "supports": [_fmt_zona(s) for s in analysis.get("supports", [])[:3]],
         "resistances": [_fmt_zona(r) for r in analysis.get("resistances", [])[:2]],
-        "gex_flip": analysis.get("gex_flip"),
-        "gex_walls": analysis.get("gex_walls", []),
+        "gex_flip":      analysis.get("gex_flip"),
+        "gex_walls":     analysis.get("gex_walls", []),
+        "vix":           analysis.get("vix"),
+        "iv_rank_pct":   _iv_rank_pct(analysis.get("iv_rank", {})),
+        "flow_bias":     analysis.get("flow_bias", {}),
     }
 
     criteria_text = criteria.get_active_prompt()
