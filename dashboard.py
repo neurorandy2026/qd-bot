@@ -328,18 +328,14 @@ HTML = """<!DOCTYPE html>
   {preview_html}
 </div>
 
-<div class="panel" style="margin-bottom:12px;background:#0c1117;border-color:#1f3a5f">
-  <h3 style="color:#7cb9ff">🤖 Consulta al Bot
-    <span class="tip section-tip" data-tip="Hazle una pregunta directa al bot. Consulta los datos actuales del mercado (precio, niveles, sesgo) para darte una respuesta concreta.">?</span>
-  </h3>
-  <form method="POST" action="/ask" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px">
-    <input id="ask-input" type="text" name="question" placeholder="ej: ¿Hasta dónde podría llegar el SPX al alza hoy?"
-           style="flex:1;min-width:200px;background:#0d1117;border:1px solid #30363d;border-radius:8px;
-                  color:#c9d1d9;padding:9px 12px;font-size:0.88em;min-height:42px;font-family:inherit"
-           required autocomplete="off">
-    <button type="submit" class="btn-secondary">Consultar →</button>
-  </form>
-  {ask_html}
+<div class="panel" style="margin-bottom:12px;background:#0c1117;border-color:#1f3a5f;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <div>
+    <h3 style="color:#7cb9ff;margin-bottom:4px">🤖 Consulta a Randy
+      <span class="tip section-tip" data-tip="Hazle una pregunta directa al bot con los datos actuales del mercado. Se abre en una página sin auto-refresh para que puedas escribir con calma.">?</span>
+    </h3>
+    <p style="color:#8b949e;font-size:0.8em">Pregunta libre · El bot responde con datos en tiempo real</p>
+  </div>
+  <a href="/ask" target="_blank"><button class="btn-secondary">Abrir Consulta →</button></a>
 </div>
 
 <div class="panels">
@@ -427,6 +423,93 @@ document.addEventListener('click', function(e) {{
   document.querySelectorAll('.tip.open').forEach(t => t.classList.remove('open'));
   if (!wasOpen) tip.classList.add('open');
   e.stopPropagation();
+}});
+</script>
+</body>
+</html>"""
+
+
+ASK_PAGE_HTML = """<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consulta a Randy</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+          background: #0d1117; color: #c9d1d9; min-height: 100vh;
+          padding: 24px 20px; max-width: 720px; margin: 0 auto; }}
+  h1 {{ font-size: 1.35em; color: #58a6ff; margin-bottom: 4px; font-weight: 700; }}
+  .subtitle {{ color: #8b949e; font-size: 0.84em; margin-bottom: 24px; }}
+  .back-link {{ display: inline-block; color: #8b949e; font-size: 0.82em;
+                margin-bottom: 18px; text-decoration: none; }}
+  .back-link:hover {{ color: #58a6ff; }}
+  .ask-form {{ display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }}
+  .ask-form input[type=text] {{ width: 100%; background: #161b22; border: 1px solid #30363d;
+    border-radius: 10px; color: #f0f6fc; padding: 14px 16px; font-size: 1em;
+    font-family: inherit; outline: none; transition: border-color 0.2s; }}
+  .ask-form input[type=text]:focus {{ border-color: #58a6ff;
+    box-shadow: 0 0 0 3px rgba(88,166,255,0.12); }}
+  .ask-form input[type=text]::placeholder {{ color: #484f58; }}
+  button {{ border: none; padding: 13px 24px; font-size: 0.92em; font-weight: 700;
+            border-radius: 10px; cursor: pointer; font-family: inherit;
+            transition: opacity 0.15s, transform 0.1s; }}
+  button:hover {{ opacity: 0.85; }}
+  button:active {{ transform: scale(0.97); }}
+  .btn-primary {{ background: #1f6feb; color: #fff; width: 100%; }}
+  .btn-ghost {{ background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 16px; font-size: 0.85em; }}
+  .answer-box {{ background: #0c1929; border: 1px solid #1f4070; border-radius: 12px;
+                 padding: 20px 22px; margin-bottom: 20px; }}
+  .answer-meta {{ color: #58a6ff; font-size: 0.72em; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: 1px; margin-bottom: 10px; }}
+  .answer-question {{ color: #8b949e; font-size: 0.85em; font-style: italic;
+                      margin-bottom: 14px; padding-bottom: 12px;
+                      border-bottom: 1px solid #1f3a5f; }}
+  .answer-text {{ font-size: 0.97em; line-height: 1.75; color: #e6edf3; }}
+  .examples {{ margin-top: 20px; }}
+  .examples h3 {{ color: #8b949e; font-size: 0.72em; text-transform: uppercase;
+                  letter-spacing: 1px; margin-bottom: 10px; font-weight: 700; }}
+  .example-btn {{ display: block; width: 100%; text-align: left; background: #161b22;
+                  border: 1px solid #30363d; border-radius: 8px; color: #8b949e;
+                  padding: 10px 14px; font-size: 0.84em; margin-bottom: 6px;
+                  cursor: pointer; font-family: inherit; transition: border-color 0.2s, color 0.2s; }}
+  .example-btn:hover {{ border-color: #58a6ff; color: #c9d1d9; }}
+  .loading {{ display: none; color: #58a6ff; font-size: 0.85em; text-align: center; padding: 20px; }}
+</style>
+</head>
+<body>
+
+<a class="back-link" href="/">← Volver al Dashboard</a>
+<h1>🤖 Consulta a Randy</h1>
+<p class="subtitle">Pregunta directa · El bot consulta los datos actuales del mercado</p>
+
+{answer_section}
+
+<form class="ask-form" method="POST" action="/ask" id="ask-form">
+  <input type="text" name="question" id="ask-input"
+         placeholder="ej: ¿Hasta dónde podría llegar el SPX al alza hoy?"
+         value="{prefill}" autocomplete="off" autofocus>
+  <button type="submit" class="btn-primary" id="ask-btn">Consultar →</button>
+</form>
+
+<div class="examples">
+  <h3>Ideas de preguntas</h3>
+  <button class="example-btn" onclick="setQ(this)">¿Dónde está el MVC hoy?</button>
+  <button class="example-btn" onclick="setQ(this)">¿Hasta dónde podría llegar el SPX al alza hoy?</button>
+  <button class="example-btn" onclick="setQ(this)">¿Qué nivel es el más importante ahora mismo?</button>
+  <button class="example-btn" onclick="setQ(this)">¿Es buen momento para vender primas?</button>
+  <button class="example-btn" onclick="setQ(this)">¿Qué pasa si el SPX pierde el pivote?</button>
+</div>
+
+<script>
+function setQ(btn) {{
+  document.getElementById('ask-input').value = btn.textContent;
+  document.getElementById('ask-input').focus();
+}}
+document.getElementById('ask-form').addEventListener('submit', function() {{
+  document.getElementById('ask-btn').textContent = 'Consultando...';
+  document.getElementById('ask-btn').disabled = true;
 }});
 </script>
 </body>
@@ -924,7 +1007,6 @@ async def handle_index(request):
         log_html=log_html,
         preview_html=_build_discord_preview(),
         darkpool_history_html=_build_darkpool_history(data.get("darkpool_history", [])),
-        ask_html=_build_ask_result(),
     )
     return web.Response(text=html, content_type="text/html")
 
@@ -984,16 +1066,35 @@ async def handle_darkpool_status(request):
     raise web.HTTPFound("/")
 
 
+def _render_ask_page(question: str = "", answer: str = "", time_str: str = "") -> str:
+    if answer:
+        answer_section = (
+            f'<div class="answer-box">'
+            f'<div class="answer-meta">🤖 Respuesta de Randy · {time_str}</div>'
+            f'<div class="answer-question">"{question}"</div>'
+            f'<div class="answer-text">{answer}</div>'
+            f'</div>'
+        )
+    else:
+        answer_section = ""
+    return ASK_PAGE_HTML.format(answer_section=answer_section,
+                                prefill=question if not answer else "")
+
+
+async def handle_ask_page(request):
+    """GET /ask — página de consulta sin auto-refresh."""
+    return web.Response(text=_render_ask_page(), content_type="text/html")
+
+
 async def handle_ask(request):
     global _last_ask
     data = await request.post()
     question = data.get("question", "").strip()
     if not question:
-        raise web.HTTPFound("/")
+        raise web.HTTPFound("/ask")
 
     add_log(f"Consulta recibida: {question[:60]}")
 
-    # Build market context from latest available data
     stats_data = st.get()
     context = {
         "ticker": stats_data.get("last_ticker", "SPX"),
@@ -1001,7 +1102,6 @@ async def handle_ask(request):
         "nota": "Datos de la última lectura — pueden tener hasta 20 min de retraso",
     }
 
-    # Try to enrich with live data + full analysis
     try:
         import qd_client
         import config_manager
@@ -1021,6 +1121,7 @@ async def handle_ask(request):
                 analysis = analyzer.analyze(market_data)
                 sesgo = analysis.get("sesgo", {})
                 gex_flip = analysis.get("gex_flip")
+                dex_flip = analysis.get("dex_flip")
                 zonas = analysis.get("zonas_fuertes", {})
                 context.update({
                     "ticker": ticker,
@@ -1037,23 +1138,26 @@ async def handle_ask(request):
             if not isinstance(enriched, Exception) and enriched:
                 context["vix"] = enriched.get("vix")
                 context["flow_bias"] = enriched.get("flow_bias", {})
-            add_log(f"Análisis completo para consulta — precio ${context.get('price','?')} · MVC ${context.get('gamma_flip_mvc','?')}")
+            add_log(f"Datos para consulta — ${context.get('price','?')} · MVC ${context.get('mvc','?')}")
     except Exception as e:
-        add_log(f"[WARN] Usando datos en caché para consulta: {e}")
+        add_log(f"[WARN] Usando datos en caché: {e}")
 
+    answer = ""
+    now_str = datetime.now(ET).strftime("%I:%M %p ET")
     if not _anthropic_key:
+        answer = "No tengo conexión con el modelo ahora. Revisa la configuración."
         add_log("[ERROR] Anthropic key no configurada")
-        raise web.HTTPFound("/")
+    else:
+        try:
+            answer = await claude_client.answer_market_question(question, context, _anthropic_key)
+            _last_ask = {"question": question, "answer": answer, "time": now_str}
+            add_log("Consulta respondida ✅")
+        except Exception as e:
+            answer = "Algo salió mal al consultar. Intenta de nuevo."
+            add_log(f"[ERROR] handle_ask: {e}")
 
-    try:
-        answer = await claude_client.answer_market_question(question, context, _anthropic_key)
-        now = datetime.now(ET).strftime("%I:%M %p ET")
-        _last_ask = {"question": question, "answer": answer, "time": now}
-        add_log(f"Consulta respondida: {answer[:80]}...")
-    except Exception as e:
-        add_log(f"[ERROR] handle_ask: {e}")
-
-    raise web.HTTPFound("/")
+    return web.Response(text=_render_ask_page(question, answer, now_str),
+                        content_type="text/html")
 
 
 async def handle_add_rule(request):
@@ -1259,6 +1363,7 @@ def create_app() -> web.Application:
     app.router.add_post("/domingo", handle_domingo)
     app.router.add_post("/darkpool-status", handle_darkpool_status)
     app.router.add_post("/reset-accuracy", handle_reset_accuracy)
+    app.router.add_get("/ask", handle_ask_page)
     app.router.add_post("/ask", handle_ask)
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
