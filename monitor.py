@@ -12,6 +12,7 @@ import notifier
 import dashboard
 import stats
 import sunday_analysis
+import darkpool_scanner
 
 ET = ZoneInfo("America/New_York")
 PRE_MARKET   = time(9, 25)
@@ -329,6 +330,8 @@ async def monitor_loop() -> None:
             timeout = aiohttp.ClientTimeout(total=20)
             tickers = config.get("tickers", ["SPX"])
 
+            dp_webhook = config.get("discord", {}).get("webhook_flujo_institucional", "")
+
             # 9:25 AM — apertura
             if pre_market and not _pre_market_sent:
                 async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -338,6 +341,7 @@ async def monitor_loop() -> None:
                 _opening_sent    = False
                 _closing_sent    = False
                 _seen_sweep_keys  = set()
+                darkpool_scanner.reset_session()
 
             # 9:30 AM — primera lectura
             elif market_open and not _opening_sent:
@@ -393,6 +397,13 @@ async def monitor_loop() -> None:
 
                             # Sweep alert check (every cycle, independent of change detection)
                             await _check_sweep_alerts(ticker, config, session)
+
+                    # Dark pool scanner — todo el mercado, una sola llamada
+                    if dp_webhook:
+                        n = await darkpool_scanner.scan_and_alert(
+                            config["qd_api_key"], dp_webhook, session)
+                        if n:
+                            dashboard.add_log(f"[DarkPool] {n} alerta(s) enviada(s)")
 
             # Reset flags al fin del día
             if not pre_market and not market_open and not closing:
