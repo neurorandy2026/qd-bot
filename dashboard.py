@@ -805,9 +805,14 @@ async def handle_darkpool_status(request):
     config = config_manager.load()
     webhook = config.get("discord", {}).get("webhook_flujo_institucional", "")
     if webhook:
-        import asyncio
-        asyncio.create_task(notifier.send_webhook(webhook, status))
-        add_discord_preview(status, "DARK POOL", "Estado")
+        ok = await notifier.send_webhook(webhook, status)
+        if ok:
+            add_log("Estado dark pool enviado a Discord ✅")
+            add_discord_preview(status, "DARK POOL", "Estado")
+        else:
+            add_log("[ERROR] No se pudo enviar estado dark pool a Discord")
+    else:
+        add_log("[ERROR] Webhook flujo_institucional no configurado")
     raise web.HTTPFound("/")
 
 
