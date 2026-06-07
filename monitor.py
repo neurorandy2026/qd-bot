@@ -80,17 +80,37 @@ def _sweep_key(trade: dict) -> str:
     return f"{trade['type']}_{trade['contract']}_{trade['strike']}_{trade['exp']}_{trade['premium']}"
 
 
+def _sweep_interpretation(trade: dict, ticker: str) -> str:
+    contract = trade.get("contract", "")
+    strike   = trade.get("strike")
+    side     = trade.get("side", "")
+    if not strike:
+        return ""
+    strike = int(strike)
+    if contract == "CALL" and side == "ABOVE_ASK":
+        return f"📊 Institucional apuesta al alza — posible movimiento hacia ${strike} o más arriba"
+    if contract == "PUT" and side == "ABOVE_ASK":
+        return f"📊 Institucional apuesta a la baja — posible movimiento hacia ${strike} o más abajo"
+    if contract == "CALL" and side == "BELOW_BID":
+        return f"📊 Venta de calls en ${strike} — posible techo o cobertura de posición larga"
+    if contract == "PUT" and side == "BELOW_BID":
+        return f"📊 Venta de puts en ${strike} — posible piso o acumulación institucional"
+    return f"📊 Actividad institucional concentrada en ${strike}"
+
+
 def _format_sweep_alert(trade: dict, ticker: str) -> str:
-    premium_k = round(trade["premium"] / 1000)
-    side_label = {"ABOVE_ASK": "compra agresiva ↑", "BELOW_BID": "venta agresiva ↓"}.get(
+    premium_k   = round(trade["premium"] / 1000)
+    side_label  = {"ABOVE_ASK": "compra agresiva ↑", "BELOW_BID": "venta agresiva ↓"}.get(
         trade.get("side", ""), trade.get("side", ""))
-    golden_tag = " ⭐ GOLDEN SWEEP" if trade.get("golden") else ""
+    golden_tag  = " ⭐ GOLDEN SWEEP" if trade.get("golden") else ""
     unusual_tag = " 🔎 inusual" if trade.get("unusual") else ""
+    interp      = _sweep_interpretation(trade, ticker)
     return (
         f"🚨 **SWEEP INSTITUCIONAL{golden_tag}** | {ticker}{unusual_tag}\n"
         f"📍 **{trade['contract']} ${int(trade['strike'])}** | Vence {trade['exp']}\n"
         f"💰 **${premium_k}K premium** · {trade['size']} contratos\n"
-        f"⚡ {side_label}"
+        f"⚡ {side_label}\n"
+        f"{interp}"
     )
 
 

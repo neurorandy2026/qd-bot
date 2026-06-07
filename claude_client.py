@@ -133,10 +133,22 @@ _Hasta mañana. 💪_
   75-100 → premium caro — vender con cuidado, puede expandirse
 - flow_bias: sesgo de flujo institucional del día (CALLS / PUTS / NEUTRO)
   Úsalo para confirmar o advertir si contradice el sesgo DEX/GEX
-- Agregar una sola línea compacta justo DESPUÉS de la línea de sesgo:
-  "📈 VIX XX.X · IV Rank XX% · Flujo: XX% calls — [interpretación de 3-5 palabras]"
-  Ej: "📈 VIX 17.2 · IV Rank 62% · Flujo: 71% calls — buen momento para vender"
-  Ej: "📈 VIX 23.1 · IV Rank 81% · Flujo: 58% puts — reducir tamaño, premium elevado"
+- Agregar una sola línea compacta justo DESPUÉS de la línea de sesgo.
+  Combina IV rank + flow_bias para decir EXACTAMENTE qué hacer y con qué estructura:
+  Formato: "📈 VIX XX.X · IV Rank XX% · Flujo: XX% calls — [acción concreta]"
+
+  Regla para la acción concreta:
+  - IV rank 50-75% + flujo CALLS → "vender PUT spreads (flujo alcista, premium vendible)"
+  - IV rank 50-75% + flujo PUTS  → "vender CALL spreads (flujo bajista, premium vendible)"
+  - IV rank 50-75% + flujo NEUTRO → "iron condor viable (premium vendible, sin sesgo claro)"
+  - IV rank > 75% + cualquier flujo → misma estructura anterior pero agrega "tamaño reducido"
+  - IV rank < 25% + cualquier flujo → "no vender premium — IV barata, mejor comprar dirección"
+  - IV rank 25-50% → "neutral — esperar expansión antes de vender"
+
+  Ej: "📈 VIX 17.2 · IV Rank 62% · Flujo: 71% calls — vender PUT spreads (flujo alcista, premium vendible)"
+  Ej: "📈 VIX 23.1 · IV Rank 81% · Flujo: 58% puts — vender CALL spreads, tamaño reducido (premium caro)"
+  Ej: "📈 VIX 14.8 · IV Rank 18% · Flujo: 52% calls — no vender premium — IV barata, mejor comprar dirección"
+
 - Si vix o iv_rank no están disponibles, omitir esa parte de la línea
 - Nunca omitir la línea completa si al menos uno de los datos está presente
 
