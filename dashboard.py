@@ -823,23 +823,28 @@ async def handle_reset_accuracy(request):
 
 
 async def handle_darkpool_status(request):
-    import darkpool_scanner
-    import config_manager
-    import notifier
-    status = darkpool_scanner.get_status()
-    for line in status.split("\n"):
-        add_log(line)
-    config = config_manager.load()
-    webhook = config.get("discord", {}).get("webhook_flujo_institucional", "")
-    if webhook:
-        ok = await notifier.send_webhook(webhook, status)
-        if ok:
-            add_log("Estado dark pool enviado a Discord ✅")
-            add_discord_preview(status, "DARK POOL", "Estado")
+    try:
+        import darkpool_scanner
+        import config_manager
+        import notifier
+        add_log("Boton dark pool presionado...")
+        status = darkpool_scanner.get_status()
+        for line in status.split("\n"):
+            add_log(line)
+        config = config_manager.load()
+        webhook = config.get("discord", {}).get("webhook_flujo_institucional", "")
+        add_log(f"Webhook: {'...'+webhook[-20:] if webhook else 'NO CONFIGURADO'}")
+        if webhook:
+            ok = await notifier.send_webhook(webhook, status)
+            if ok:
+                add_log("Estado dark pool enviado a Discord ✅")
+                add_discord_preview(status, "DARK POOL", "Estado")
+            else:
+                add_log("[ERROR] Discord rechazó el mensaje")
         else:
-            add_log("[ERROR] No se pudo enviar estado dark pool a Discord")
-    else:
-        add_log("[ERROR] Webhook flujo_institucional no configurado")
+            add_log("[ERROR] Webhook flujo_institucional no configurado en Railway")
+    except Exception as e:
+        add_log(f"[ERROR] handle_darkpool_status: {e}")
     raise web.HTTPFound("/")
 
 
