@@ -26,8 +26,8 @@ CLUSTER_WINDOW_MIN     = 10           # ventana de clustering en minutos
 ALERT_COOLDOWN_MIN     = 30           # no repetir alerta del mismo ticker antes de 30 min
 
 # Horario válido (ET)
-VALID_START = time(10, 0)
-VALID_END   = time(15, 30)
+VALID_START = time(9, 30)
+VALID_END   = time(15, 55)
 
 # ── Estado de sesión ───────────────────────────────────
 _seen_ids: set = set()
