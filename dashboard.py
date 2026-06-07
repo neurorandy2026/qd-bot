@@ -185,7 +185,7 @@ HTML = """<!DOCTYPE html>
 <body>
 
 <h1>📊 QD Bot — Panel de Control</h1>
-<p class="subtitle">Lector de mercado en tiempo real · Actualiza cada 30s</p>
+<p class="subtitle">Lector de mercado en tiempo real · Actualiza cada 5s</p>
 
 <div class="status-bar">
   <span class="dot {dot_class}"></span>
@@ -308,7 +308,7 @@ HTML = """<!DOCTYPE html>
   <a href="/lessons"><button class="btn-secondary">Abrir Lecciones →</button></a>
 </div>
 
-<script>setTimeout(() => location.reload(), 30000);</script>
+<script>setTimeout(() => location.reload(), 5000);</script>
 </body>
 </html>"""
 
