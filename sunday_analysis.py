@@ -602,10 +602,19 @@ async def send_domingo_to_discord(report_text: str, webhook_url: str, session_da
         chunks.append(current.rstrip())
 
     async with aiohttp.ClientSession() as session:
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
+            if i > 0:
+                await asyncio.sleep(1.5)  # evitar rate limit de Discord
             async with session.post(webhook_url, json={"content": chunk},
                                     timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status not in (200, 204):
+                if resp.status == 429:
+                    # Rate limited — esperar y reintentar una vez
+                    await asyncio.sleep(5)
+                    async with session.post(webhook_url, json={"content": chunk},
+                                            timeout=aiohttp.ClientTimeout(total=15)) as retry:
+                        if retry.status not in (200, 204):
+                            return False
+                elif resp.status not in (200, 204):
                     return False
     return True
 
