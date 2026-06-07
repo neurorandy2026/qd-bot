@@ -175,6 +175,43 @@ _Hasta mañana. 💪_
 - Nunca más de 2 zonas arriba y 2 abajo"""
 
 
+async def answer_market_question(question: str, context: dict, api_key: str) -> str:
+    """Answer a direct question from the dashboard using current market data."""
+    system = (
+        "Eres el asistente de Randy, un trader e instructor de opciones. "
+        "Te hacen una pregunta directa sobre el mercado. "
+        "Tienes acceso a datos actuales de estructura de opciones. "
+        "NUNCA menciones DEX, GEX, gamma, delta, exposición ni creadores de mercado. "
+        "Responde en 3-5 oraciones claras, directo y en español, en la voz segura de Randy. "
+        "Si la pregunta es sobre niveles o precio, da números concretos. "
+        "Si los datos no permiten responder con certeza, indícalo honestamente."
+    )
+    data_text = (
+        f"Datos actuales del mercado:\n{json.dumps(context, indent=2, ensure_ascii=False)}"
+        f"\n\nPregunta: {question}"
+    )
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 300,
+                "system": system,
+                "messages": [{"role": "user", "content": data_text}],
+            },
+            timeout=aiohttp.ClientTimeout(total=20),
+        ) as resp:
+            if resp.status != 200:
+                return "No pude obtener respuesta del modelo en este momento. Intenta de nuevo."
+            data = await resp.json()
+            return data.get("content", [{}])[0].get("text", "").strip()
+
+
 async def analyze_lesson(
     image_b64: str,
     image_type: str,

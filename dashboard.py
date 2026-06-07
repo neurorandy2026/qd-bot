@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import uuid
 from aiohttp import web
@@ -15,6 +16,7 @@ _domingo_callback = None
 _anthropic_key: str = ""
 _pending_lessons: dict = {}  # temp_id -> pending lesson data
 _discord_preview: list = []  # últimos 3 mensajes enviados a Discord
+_last_ask: dict = {}         # última consulta al bot desde el dashboard
 
 RULES_PASSWORD = "1611"
 
@@ -60,79 +62,83 @@ HTML = """<!DOCTYPE html>
 <title>QD Bot</title>
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: 'Segoe UI', monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; padding: 20px; }}
-  h1 {{ font-size: 1.3em; color: #58a6ff; margin-bottom: 4px; }}
+  body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; padding: 20px; }}
+  h1 {{ font-size: 1.35em; color: #58a6ff; margin-bottom: 4px; font-weight: 700; letter-spacing: -0.3px; }}
   .subtitle {{ color: #8b949e; font-size: 0.82em; margin-bottom: 20px; }}
-  .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }}
-  .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 14px; }}
-  .card .label {{ color: #8b949e; font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }}
-  .card .value {{ font-size: 1.8em; font-weight: bold; color: #f0f6fc; }}
+  .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin-bottom: 20px; }}
+  .card {{ background: #161b22; border: 1px solid #30363d; border-top: 2px solid #21262d; border-radius: 10px; padding: 14px; transition: border-top-color 0.3s; }}
+  .card:hover {{ border-top-color: #58a6ff; }}
+  .card .label {{ color: #8b949e; font-size: 0.71em; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; font-weight: 700; }}
+  .card .value {{ font-size: 1.9em; font-weight: 700; color: #f0f6fc; line-height: 1; }}
   .card .value.green {{ color: #3fb950; }}
   .card .value.yellow {{ color: #d29922; }}
   .card .value.blue {{ color: #58a6ff; }}
   .card .value.red {{ color: #f85149; }}
-  .card .sub {{ color: #8b949e; font-size: 0.78em; margin-top: 4px; }}
+  .card .sub {{ color: #8b949e; font-size: 0.75em; margin-top: 7px; }}
   .status-bar {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 12px 16px;
                  display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }}
-  .dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; }}
-  .dot.green {{ background: #3fb950; box-shadow: 0 0 6px #3fb950; }}
+  .dot {{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }}
+  .dot.green {{ background: #3fb950; box-shadow: 0 0 7px #3fb950; }}
   .dot.red {{ background: #f85149; }}
-  .dot.yellow {{ background: #d29922; box-shadow: 0 0 6px #d29922; animation: pulse 1.5s infinite; }}
+  .dot.yellow {{ background: #d29922; box-shadow: 0 0 7px #d29922; animation: pulse 1.5s infinite; }}
   @keyframes pulse {{ 0%,100%{{opacity:1}} 50%{{opacity:0.5}} }}
   .btn-row {{ display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }}
-  button {{ border: none; padding: 10px 20px; font-size: 0.88em; font-weight: 600;
-            border-radius: 6px; cursor: pointer; transition: opacity 0.2s; }}
-  button:hover {{ opacity: 0.8; }}
+  button {{ border: none; padding: 10px 18px; font-size: 0.88em; font-weight: 600;
+            border-radius: 8px; cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+            min-height: 42px; line-height: 1.2; font-family: inherit; }}
+  button:hover {{ opacity: 0.82; }}
+  button:active {{ transform: scale(0.97); opacity: 1; }}
   .btn-primary {{ background: #238636; color: #fff; }}
   .btn-secondary {{ background: #1f6feb; color: #fff; }}
   .btn-ghost {{ background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }}
-  .btn-danger {{ background: #6e1c1c; color: #f85149; border: 1px solid #6e1c1c; font-size: 0.78em; padding: 4px 10px; }}
+  .btn-danger {{ background: #6e1c1c; color: #f85149; border: 1px solid #6e1c1c; font-size: 0.78em; padding: 6px 12px; min-height: 36px; }}
   .btn-purple {{ background: #4a1d96; color: #c4b5fd; border: 1px solid #6d28d9; }}
   .btn-teal {{ background: #0e4429; color: #56d364; border: 1px solid #238636; }}
-  .btn-sm {{ padding: 4px 12px; font-size: 0.78em; }}
+  .btn-sm {{ padding: 4px 12px; font-size: 0.78em; min-height: 30px; }}
   .panels {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
-  @media(max-width: 600px) {{ .panels {{ grid-template-columns: 1fr; }} }}
+  @media(max-width: 640px) {{ .panels {{ grid-template-columns: 1fr; }} }}
   .panel {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 14px; }}
-  .panel h3 {{ color: #8b949e; font-size: 0.78em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }}
-  .log-entry {{ font-size: 0.78em; padding: 5px 0; border-bottom: 1px solid #21262d; color: #8b949e; }}
+  .panel h3 {{ color: #8b949e; font-size: 0.71em; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; font-weight: 700; }}
+  .log-entry {{ font-size: 0.75em; padding: 5px 0; border-bottom: 1px solid #21262d; color: #8b949e; font-family: 'Courier New', monospace; }}
   .log-entry:first-child {{ color: #c9d1d9; }}
   .log-entry:last-child {{ border-bottom: none; }}
-  .level-chip {{ display: inline-block; background: #21262d; border-radius: 4px; padding: 2px 8px;
-                 font-size: 0.82em; margin: 2px; border: 1px solid #30363d; }}
+  .level-chip {{ display: inline-block; background: #21262d; border-radius: 4px; padding: 3px 9px;
+                 font-size: 0.82em; margin: 2px; border: 1px solid #30363d; font-weight: 600; }}
   .level-chip.support {{ border-color: #3fb950; color: #3fb950; }}
   .level-chip.resistance {{ border-color: #f85149; color: #f85149; }}
-  .history-row {{ display: flex; justify-content: space-between; font-size: 0.8em; padding: 4px 0;
-                  border-bottom: 1px solid #21262d; }}
+  .history-row {{ display: flex; justify-content: space-between; align-items: center; font-size: 0.8em; padding: 5px 0;
+                  border-bottom: 1px solid #21262d; gap: 6px; }}
   .history-row:last-child {{ border-bottom: none; }}
-  .badge {{ padding: 2px 8px; border-radius: 10px; font-size: 0.75em; font-weight: 600; }}
+  .badge {{ padding: 2px 9px; border-radius: 10px; font-size: 0.75em; font-weight: 700; white-space: nowrap; }}
   .badge.green {{ background: #0d4429; color: #3fb950; }}
   .badge.red {{ background: #3d0f0f; color: #f85149; }}
-  .accuracy-bar {{ background: #21262d; border-radius: 4px; height: 8px; margin-top: 6px; overflow: hidden; }}
-  .accuracy-fill {{ height: 100%; background: #3fb950; border-radius: 4px; transition: width 0.5s; }}
+  .accuracy-bar {{ background: #21262d; border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }}
+  .accuracy-fill {{ height: 100%; background: linear-gradient(90deg, #2ea043, #56d364); border-radius: 4px; transition: width 0.6s ease; }}
   .discord-msg {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
-                  margin-bottom: 8px; font-size: 0.78em; white-space: pre-wrap; line-height: 1.5; }}
-  .discord-msg .msg-header {{ color: #8b949e; font-size: 0.85em; margin-bottom: 6px; }}
-  .preview-panel {{ background: #161b22; border: 1px solid #1f6feb; border-radius: 10px; padding: 14px; margin-bottom: 12px; }}
-  .preview-panel h3 {{ color: #58a6ff; font-size: 0.78em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }}
+                  margin-bottom: 8px; font-size: 0.76em; white-space: pre-wrap; line-height: 1.55; font-family: 'Courier New', monospace; }}
+  .discord-msg .msg-header {{ color: #8b949e; font-size: 0.85em; margin-bottom: 6px; font-family: inherit; }}
+  .preview-panel {{ background: #0c1929; border: 1px solid #1f4070; border-radius: 10px; padding: 14px; margin-bottom: 12px; }}
+  .preview-panel h3 {{ color: #58a6ff; font-size: 0.71em; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; font-weight: 700; }}
   .preview-msg {{ background: #0d1117; border-left: 3px solid #1f6feb; border-radius: 0 8px 8px 0; padding: 10px 14px;
-                  margin-bottom: 10px; font-size: 0.82em; white-space: pre-wrap; line-height: 1.6; color: #c9d1d9; }}
-  .preview-msg .msg-meta {{ color: #58a6ff; font-size: 0.8em; margin-bottom: 6px; font-weight: 600; }}
-  .preview-empty {{ color: #8b949e; font-size: 0.82em; text-align: center; padding: 20px; }}
-  .pwd-input {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;
-                padding: 8px 10px; font-size: 0.85em; width: 90px; }}
+                  margin-bottom: 10px; font-size: 0.8em; white-space: pre-wrap; line-height: 1.65; color: #c9d1d9; font-family: 'Courier New', monospace; }}
+  .preview-msg .msg-meta {{ color: #58a6ff; font-size: 0.75em; margin-bottom: 7px; font-weight: 700; font-family: inherit; text-transform: uppercase; letter-spacing: 0.8px; }}
+  .preview-empty {{ color: #8b949e; font-size: 0.82em; text-align: center; padding: 24px; }}
+  .pwd-input {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9;
+                padding: 9px 12px; font-size: 0.88em; width: 110px; min-height: 42px; font-family: inherit; }}
+  .pwd-input:focus {{ outline: none; border-color: #58a6ff; box-shadow: 0 0 0 3px rgba(88,166,255,0.12); }}
   /* Criteria styles */
-  .criteria-form {{ display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }}
+  .criteria-form {{ display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }}
   .criteria-form input[type=text] {{ flex: 1; min-width: 200px; background: #0d1117; border: 1px solid #30363d;
-    border-radius: 6px; color: #c9d1d9; padding: 8px 12px; font-size: 0.85em; }}
-  .criteria-form input[type=text]:focus {{ outline: none; border-color: #58a6ff; }}
-  .criteria-form select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
-    color: #c9d1d9; padding: 8px; font-size: 0.85em; }}
+    border-radius: 8px; color: #c9d1d9; padding: 9px 12px; font-size: 0.85em; min-height: 42px; font-family: inherit; }}
+  .criteria-form input[type=text]:focus {{ outline: none; border-color: #58a6ff; box-shadow: 0 0 0 3px rgba(88,166,255,0.12); }}
+  .criteria-form select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    color: #c9d1d9; padding: 9px 10px; font-size: 0.85em; min-height: 42px; font-family: inherit; }}
   .rule-card {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
                 margin-bottom: 8px; }}
   .rule-card.inactive {{ opacity: 0.4; }}
-  .rule-header {{ display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }}
+  .rule-header {{ display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; }}
   .rule-text {{ font-size: 0.85em; color: #c9d1d9; flex: 1; line-height: 1.4; }}
-  .cat-badge {{ font-size: 0.7em; padding: 2px 7px; border-radius: 10px; font-weight: 600; white-space: nowrap; }}
+  .cat-badge {{ font-size: 0.7em; padding: 2px 7px; border-radius: 10px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }}
   .cat-DEX {{ background: #0d2137; color: #58a6ff; }}
   .cat-GEX {{ background: #0d2b1a; color: #3fb950; }}
   .cat-Mensajes {{ background: #2b1f0d; color: #d29922; }}
@@ -141,16 +147,16 @@ HTML = """<!DOCTYPE html>
   .rule-meta {{ font-size: 0.72em; color: #8b949e; margin-top: 3px; }}
   .toggle {{ cursor: pointer; font-size: 1.1em; }}
   .active-prompt-preview {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
-    padding: 8px 12px; font-size: 0.75em; color: #8b949e; white-space: pre-wrap;
-    max-height: 80px; overflow-y: auto; margin-bottom: 10px; }}
+    padding: 8px 12px; font-size: 0.73em; color: #8b949e; white-space: pre-wrap;
+    max-height: 80px; overflow-y: auto; margin-bottom: 10px; font-family: 'Courier New', monospace; }}
   /* Lessons styles */
   .lesson-form {{ display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }}
-  .lesson-form textarea {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  .lesson-form textarea {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
     color: #c9d1d9; padding: 8px 12px; font-size: 0.85em; resize: vertical; min-height: 70px;
     font-family: inherit; }}
   .lesson-form textarea:focus {{ outline: none; border-color: #58a6ff; }}
   .lesson-form-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
-  .lesson-form select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  .lesson-form select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
     color: #c9d1d9; padding: 8px; font-size: 0.85em; }}
   .paste-zone {{ border: 2px dashed #30363d; border-radius: 8px; padding: 14px 16px;
     text-align: center; color: #8b949e; font-size: 0.82em; cursor: pointer;
@@ -162,7 +168,7 @@ HTML = """<!DOCTYPE html>
     border: 1px solid #30363d; display: block; }}
   .paste-clear {{ position: absolute; top: 6px; right: 8px; background: #6e1c1c;
     color: #f85149; border: none; border-radius: 4px; padding: 2px 8px; font-size: 0.75em;
-    cursor: pointer; display: none; }}
+    cursor: pointer; display: none; min-height: unset; }}
   .lesson-card {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
     padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; }}
   .lesson-card.inactive {{ opacity: 0.4; }}
@@ -180,6 +186,46 @@ HTML = """<!DOCTYPE html>
   .cat-Error {{ background: #2b0d1a; color: #f85149; }}
   .cat-Ejemplo {{ background: #0d2b1a; color: #3fb950; }}
   .cat-Criterio {{ background: #2b1a0d; color: #d29922; }}
+  /* ── Log panel terminal ── */
+  .log-panel {{ background: #080d11; border-color: #1a3326; border-left: 3px solid #2ea043; }}
+  .log-panel h3 {{ color: #56d364; }}
+  .log-panel .log-entry {{ color: #6e8070; border-bottom-color: #101a14; }}
+  .log-panel .log-entry:first-child {{ color: #56d364; font-weight: 600; }}
+  .live-badge {{ display: inline-block; font-size: 0.9em; color: #3fb950;
+    font-weight: 700; animation: pulse 2s infinite; margin-left: 8px;
+    text-transform: none; letter-spacing: 0.3px; }}
+  /* ── Tooltips ── */
+  .btn-wrap {{ display: flex; align-items: center; gap: 5px; }}
+  .tip {{ display: inline-flex; align-items: center; justify-content: center;
+    width: 17px; height: 17px; border-radius: 50%; background: #1c2128;
+    border: 1px solid #30363d; color: #8b949e; font-size: 0.68em; font-weight: 700;
+    cursor: help; position: relative; vertical-align: middle; flex-shrink: 0;
+    line-height: 1; user-select: none; }}
+  .tip::after {{ content: attr(data-tip); position: absolute; bottom: calc(100% + 9px);
+    left: 50%; transform: translateX(-50%); background: #1c2128; border: 1px solid #444c56;
+    color: #c9d1d9; font-size: 1.5em; font-weight: 400; padding: 8px 11px;
+    border-radius: 8px; width: 210px; opacity: 0; pointer-events: none;
+    transition: opacity 0.15s; z-index: 200; line-height: 1.45;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5); text-align: left; white-space: normal; }}
+  .tip:hover::after, .tip.open::after {{ opacity: 1; }}
+  .section-tip {{ margin-left: 6px; }}
+  /* ── Mobile ── */
+  @media(max-width: 520px) {{
+    body {{ padding: 12px; }}
+    h1 {{ font-size: 1.15em; }}
+    .btn-row {{ gap: 8px; }}
+    .btn-row form {{ flex: 1; min-width: calc(50% - 4px); }}
+    .btn-row button {{ width: 100%; justify-content: center; }}
+    button {{ min-height: 48px; }}
+    .btn-sm {{ min-height: 32px; }}
+    .criteria-form {{ flex-direction: column; }}
+    .criteria-form input[type=text],
+    .criteria-form select,
+    .pwd-input {{ width: 100%; min-width: unset; }}
+    .criteria-form button.btn-primary.btn-sm {{ width: 100%; padding: 12px; font-size: 0.9em; min-height: 46px; }}
+    .status-bar {{ gap: 8px; font-size: 0.88em; padding: 10px 12px; }}
+    .grid {{ grid-template-columns: repeat(2, 1fr); }}
+  }}
 </style>
 </head>
 <body>
@@ -227,44 +273,84 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <div class="btn-row">
-  <form method="POST" action="/trigger" style="display:inline">
-    <button type="submit" class="btn-primary">📤 Enviar Lectura Ahora</button>
-  </form>
-  <form method="POST" action="/trigger?tipo=apertura" style="display:inline">
-    <button type="submit" class="btn-secondary">🌅 Apertura</button>
-  </form>
-  <form method="POST" action="/trigger?tipo=cierre" style="display:inline">
-    <button type="submit" class="btn-ghost">🔔 Cierre</button>
-  </form>
-  <form method="POST" action="/domingo" style="display:inline">
-    <button type="submit" class="btn-purple">📅 Analisis Dominical SPX</button>
-  </form>
-  <form method="POST" action="/darkpool-status" style="display:inline">
-    <button type="submit" class="btn-teal">🏦 Estado Dark Pool</button>
-  </form>
-  <form method="POST" action="/reset-accuracy" style="display:inline" onsubmit="return confirm('¿Resetear contadores de precisión?')">
-    <button type="submit" class="btn-danger" style="font-size:0.78em;padding:6px 12px">🔄 Reset Precisión</button>
-  </form>
+  <div class="btn-wrap">
+    <form method="POST" action="/trigger" style="display:inline">
+      <button type="submit" class="btn-primary">📤 Enviar Lectura Ahora</button>
+    </form>
+    <span class="tip" data-tip="Envía una lectura del SPX a Discord en este momento, sin esperar el ciclo automático de 20 min.">?</span>
+  </div>
+  <div class="btn-wrap">
+    <form method="POST" action="/trigger?tipo=apertura" style="display:inline">
+      <button type="submit" class="btn-secondary">🌅 Apertura</button>
+    </form>
+    <span class="tip" data-tip="Genera el mensaje especial de apertura con los niveles clave del día y contexto de flujo.">?</span>
+  </div>
+  <div class="btn-wrap">
+    <form method="POST" action="/trigger?tipo=cierre" style="display:inline">
+      <button type="submit" class="btn-ghost">🔔 Cierre</button>
+    </form>
+    <span class="tip" data-tip="Genera el resumen de cierre: qué niveles aguantaron, qué rompió y qué vigilar mañana.">?</span>
+  </div>
+  <div class="btn-wrap">
+    <form method="POST" action="/domingo" style="display:inline">
+      <button type="submit" class="btn-purple">📅 Analisis Dominical SPX</button>
+    </form>
+    <span class="tip" data-tip="Produce el análisis semanal completo del SPX. Se envía automáticamente cada domingo, pero puedes forzarlo aquí.">?</span>
+  </div>
+  <div class="btn-wrap">
+    <form method="POST" action="/darkpool-status" style="display:inline">
+      <button type="submit" class="btn-teal">🏦 Estado Dark Pool</button>
+    </form>
+    <span class="tip" data-tip="Consulta el scanner institucional y envía al canal de dark pool qué empresas están acumulando flujo en este momento.">?</span>
+  </div>
+  <div class="btn-wrap">
+    <form method="POST" action="/reset-accuracy" style="display:inline" onsubmit="return confirm('¿Resetear contadores de precisión?')">
+      <button type="submit" class="btn-danger" style="font-size:0.78em;padding:6px 12px">🔄 Reset Precisión</button>
+    </form>
+    <span class="tip" data-tip="Reinicia los contadores de niveles aguantados y rotos. Útil al inicio de una nueva semana.">?</span>
+  </div>
 </div>
 
 <div class="preview-panel">
-  <h3>📱 Vista Previa Discord — últimos mensajes del bot</h3>
+  <h3>📱 Vista Previa Discord — últimos mensajes del bot
+    <span class="tip section-tip" data-tip="Muestra los últimos 3 mensajes que el bot envió a Discord. Verifica aquí qué recibieron tus coaches antes de que llegue al canal.">?</span>
+  </h3>
   {preview_html}
+</div>
+
+<div class="panel" style="margin-bottom:12px;background:#0c1117;border-color:#1f3a5f">
+  <h3 style="color:#7cb9ff">🤖 Consulta al Bot
+    <span class="tip section-tip" data-tip="Hazle una pregunta directa al bot. Consulta los datos actuales del mercado (precio, niveles, sesgo) para darte una respuesta concreta.">?</span>
+  </h3>
+  <form method="POST" action="/ask" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px">
+    <input type="text" name="question" placeholder="ej: ¿Hasta dónde podría llegar el SPX al alza hoy?"
+           style="flex:1;min-width:200px;background:#0d1117;border:1px solid #30363d;border-radius:8px;
+                  color:#c9d1d9;padding:9px 12px;font-size:0.88em;min-height:42px;font-family:inherit"
+           required autocomplete="off">
+    <button type="submit" class="btn-secondary">Consultar →</button>
+  </form>
+  {ask_html}
 </div>
 
 <div class="panels">
   <div class="panel">
-    <h3>📍 Niveles Activos</h3>
+    <h3>📍 Niveles Activos
+      <span class="tip section-tip" data-tip="Soportes y resistencias que el bot monitorea en tiempo real. Si el precio se acerca, el bot evalúa si aguanta o rompe.">?</span>
+    </h3>
     {active_levels_html}
   </div>
   <div class="panel">
-    <h3>🎯 Historial de Niveles</h3>
+    <h3>🎯 Historial de Niveles
+      <span class="tip section-tip" data-tip="Registro de cada nivel probado: ✅ si el precio aguantó la zona, ❌ si la rompió. Usado para calcular la precisión.">?</span>
+    </h3>
     {history_html}
   </div>
 </div>
 
 <div class="panel" style="margin-top:12px">
-  <h3>🧠 Criterio del Instructor — Reglas Activas en Claude</h3>
+  <h3>🧠 Criterio del Instructor — Reglas Activas en Claude
+    <span class="tip section-tip" data-tip="Reglas que Randy agrega para afinar cómo Claude interpreta el mercado. Requiere clave 🔑. Solo el instructor puede modificarlas.">?</span>
+  </h3>
 
   <form class="criteria-form" method="POST" action="/add-rule">
     <input type="text" name="rule_text" placeholder="Nueva regla... ej: Si hay zona magnética de 3 strikes, mencionar el target exacto" required>
@@ -286,29 +372,48 @@ HTML = """<!DOCTYPE html>
 
 <div class="panels" style="margin-top:12px">
   <div class="panel">
-    <h3>💬 Últimos Mensajes a Discord</h3>
+    <h3>💬 Últimos Mensajes a Discord
+      <span class="tip section-tip" data-tip="Copia de los últimos 2 mensajes enviados al canal principal de Discord con marca de tiempo.">?</span>
+    </h3>
     {discord_msgs_html}
   </div>
-  <div class="panel">
-    <h3>📋 Log del Bot</h3>
+  <div class="panel log-panel">
+    <h3>📋 Log del Bot <span class="live-badge">● LIVE</span>
+      <span class="tip section-tip" data-tip="Registro en tiempo real de toda la actividad: ciclos de lectura, alertas enviadas, errores y acciones manuales. Se actualiza cada 5 seg.">?</span>
+    </h3>
     {log_html}
   </div>
 </div>
 
 <div class="panel" style="margin-top:12px">
-  <h3>🏦 Historial Dark Pool Institucional</h3>
+  <h3>🏦 Historial Dark Pool Institucional
+    <span class="tip section-tip" data-tip="Alertas de flujo institucional detectadas: empresas donde entraron +$20M en dark pool en la misma dirección en menos de 10 min.">?</span>
+  </h3>
   {darkpool_history_html}
 </div>
 
 <div class="panel" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
   <div>
-    <h3 style="margin-bottom:4px">📚 Lecciones de Aprendizaje</h3>
+    <h3 style="margin-bottom:4px">📚 Lecciones de Aprendizaje
+      <span class="tip section-tip" data-tip="Banco de aprendizaje donde Randy enseña al bot con observaciones e imágenes. Las lecciones activas se inyectan en cada lectura de Claude.">?</span>
+    </h3>
     <p style="color:#8b949e;font-size:0.8em">{active_lessons} activas inyectadas en cada lectura de Claude</p>
   </div>
   <a href="/lessons"><button class="btn-secondary">Abrir Lecciones →</button></a>
 </div>
 
-<script>setTimeout(() => location.reload(), 5000);</script>
+<script>
+setTimeout(() => location.reload(), 5000);
+// Mobile: tap ? to toggle tooltip
+document.addEventListener('click', function(e) {{
+  const tip = e.target.closest('.tip');
+  if (!tip) {{ document.querySelectorAll('.tip.open').forEach(t => t.classList.remove('open')); return; }}
+  const wasOpen = tip.classList.contains('open');
+  document.querySelectorAll('.tip.open').forEach(t => t.classList.remove('open'));
+  if (!wasOpen) tip.classList.add('open');
+  e.stopPropagation();
+}});
+</script>
 </body>
 </html>"""
 
@@ -712,6 +817,21 @@ def _build_discord_preview() -> str:
     return html
 
 
+def _build_ask_result() -> str:
+    if not _last_ask:
+        return '<p style="color:#8b949e;font-size:0.82em;padding:4px 0">Escribe una pregunta arriba — el bot consultará los datos actuales del mercado para responderte.</p>'
+    a = _last_ask
+    return (
+        f'<div style="background:#0d1117;border-left:3px solid #1f6feb;border-radius:0 8px 8px 0;'
+        f'padding:11px 14px;font-size:0.86em;line-height:1.65;color:#c9d1d9">'
+        f'<div style="color:#7cb9ff;font-size:0.72em;font-weight:700;text-transform:uppercase;'
+        f'letter-spacing:0.8px;margin-bottom:5px">🤖 Respuesta · {a["time"]}</div>'
+        f'<div style="color:#8b949e;font-size:0.8em;margin-bottom:8px;font-style:italic">"{a["question"]}"</div>'
+        f'{a["answer"]}'
+        f'</div>'
+    )
+
+
 def _build_prompt_preview(prompt: str) -> str:
     if not prompt:
         return ""
@@ -789,6 +909,7 @@ async def handle_index(request):
         log_html=log_html,
         preview_html=_build_discord_preview(),
         darkpool_history_html=_build_darkpool_history(data.get("darkpool_history", [])),
+        ask_html=_build_ask_result(),
     )
     return web.Response(text=html, content_type="text/html")
 
@@ -797,7 +918,6 @@ async def handle_trigger(request):
     tipo = request.rel_url.query.get("tipo", "lectura")
     add_log(f"Boton presionado: {tipo} — callback={'OK' if _trigger_callback else 'NO REGISTRADO'}")
     if _trigger_callback:
-        import asyncio
         asyncio.create_task(_trigger_callback(tipo))
     else:
         add_log("[ERROR] Monitor loop no esta corriendo — reinicia el servicio en Railway")
@@ -806,7 +926,6 @@ async def handle_trigger(request):
 
 async def handle_domingo(request):
     if _domingo_callback:
-        import asyncio
         asyncio.create_task(_domingo_callback())
         add_log("Analisis dominical SPX iniciado desde el panel...")
     raise web.HTTPFound("/")
@@ -847,6 +966,64 @@ async def handle_darkpool_status(request):
             add_log("[ERROR] Webhook flujo_institucional no configurado en Railway")
     except Exception as e:
         add_log(f"[ERROR] handle_darkpool_status: {e}")
+    raise web.HTTPFound("/")
+
+
+async def handle_ask(request):
+    global _last_ask
+    data = await request.post()
+    question = data.get("question", "").strip()
+    if not question:
+        raise web.HTTPFound("/")
+
+    add_log(f"Consulta recibida: {question[:60]}")
+
+    # Build market context from latest available data
+    stats_data = st.get()
+    context = {
+        "ticker": stats_data.get("last_ticker", "SPX"),
+        "price": stats_data.get("last_price", 0),
+        "nota": "Datos de la última lectura — pueden tener hasta 20 min de retraso",
+    }
+
+    # Try to enrich with live data
+    try:
+        import qd_client
+        import config_manager
+        import aiohttp as _aiohttp
+        cfg = config_manager.load()
+        api_key = cfg.get("quantdata", {}).get("api_key", "")
+        ticker = cfg.get("tickers", ["SPX"])[0]
+        if api_key:
+            async with _aiohttp.ClientSession() as s:
+                price_data, enriched = await asyncio.gather(
+                    qd_client.fetch_market_data(ticker, s, api_key),
+                    qd_client.fetch_enriched_context(ticker, s, api_key),
+                    return_exceptions=True,
+                )
+            if not isinstance(price_data, Exception) and price_data:
+                context["price"] = price_data.get("price", context["price"])
+                context["ticker"] = ticker
+                context.pop("nota", None)
+            if not isinstance(enriched, Exception) and enriched:
+                context["vix"] = enriched.get("vix")
+                context["flow_bias"] = enriched.get("flow_bias", {})
+            add_log(f"Datos en tiempo real para consulta — precio ${context.get('price', '?')}")
+    except Exception as e:
+        add_log(f"[WARN] Usando datos en caché para consulta: {e}")
+
+    if not _anthropic_key:
+        add_log("[ERROR] Anthropic key no configurada")
+        raise web.HTTPFound("/")
+
+    try:
+        answer = await claude_client.answer_market_question(question, context, _anthropic_key)
+        now = datetime.now(ET).strftime("%I:%M %p ET")
+        _last_ask = {"question": question, "answer": answer, "time": now}
+        add_log(f"Consulta respondida: {answer[:80]}...")
+    except Exception as e:
+        add_log(f"[ERROR] handle_ask: {e}")
+
     raise web.HTTPFound("/")
 
 
@@ -1053,6 +1230,7 @@ def create_app() -> web.Application:
     app.router.add_post("/domingo", handle_domingo)
     app.router.add_post("/darkpool-status", handle_darkpool_status)
     app.router.add_post("/reset-accuracy", handle_reset_accuracy)
+    app.router.add_post("/ask", handle_ask)
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
     app.router.add_post("/delete-rule", handle_delete_rule)
