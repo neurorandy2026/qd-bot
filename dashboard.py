@@ -989,29 +989,42 @@ async def handle_ask(request):
         "nota": "Datos de la última lectura — pueden tener hasta 20 min de retraso",
     }
 
-    # Try to enrich with live data
+    # Try to enrich with live data + full analysis
     try:
         import qd_client
         import config_manager
+        import analyzer
         import aiohttp as _aiohttp
         cfg = config_manager.load()
         api_key = cfg.get("quantdata", {}).get("api_key", "")
         ticker = cfg.get("tickers", ["SPX"])[0]
         if api_key:
             async with _aiohttp.ClientSession() as s:
-                price_data, enriched = await asyncio.gather(
+                market_data, enriched = await asyncio.gather(
                     qd_client.fetch_market_data(ticker, s, api_key),
                     qd_client.fetch_enriched_context(ticker, s, api_key),
                     return_exceptions=True,
                 )
-            if not isinstance(price_data, Exception) and price_data:
-                context["price"] = price_data.get("price", context["price"])
-                context["ticker"] = ticker
+            if not isinstance(market_data, Exception) and market_data and market_data.get("price"):
+                analysis = analyzer.analyze(market_data)
+                sesgo = analysis.get("sesgo", {})
+                gex_flip = analysis.get("gex_flip")
+                zonas = analysis.get("zonas_fuertes", {})
+                context.update({
+                    "ticker": ticker,
+                    "price": market_data.get("price"),
+                    "sesgo": sesgo.get("sesgo", "NEUTRAL"),
+                    "fuerza": sesgo.get("strength", ""),
+                    "gamma_flip_mvc": int(gex_flip["strike"]) if gex_flip else None,
+                    "precio_sobre_mvc": gex_flip.get("price_above_flip") if gex_flip else None,
+                    "soportes_clave": [int(z["strike"]) for z in zonas.get("top_supports", [])],
+                    "resistencias_clave": [int(z["strike"]) for z in zonas.get("top_resistances", [])],
+                })
                 context.pop("nota", None)
             if not isinstance(enriched, Exception) and enriched:
                 context["vix"] = enriched.get("vix")
                 context["flow_bias"] = enriched.get("flow_bias", {})
-            add_log(f"Datos en tiempo real para consulta — precio ${context.get('price', '?')}")
+            add_log(f"Análisis completo para consulta — precio ${context.get('price','?')} · MVC ${context.get('gamma_flip_mvc','?')}")
     except Exception as e:
         add_log(f"[WARN] Usando datos en caché para consulta: {e}")
 
