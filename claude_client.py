@@ -134,22 +134,30 @@ _Hasta mañana. 💪_
 - flow_bias: sesgo de flujo institucional del día (CALLS / PUTS / NEUTRO)
   Úsalo para confirmar o advertir si contradice el sesgo DEX/GEX
 - Agregar una sola línea compacta justo DESPUÉS de la línea de sesgo.
-  Combina IV rank + flow_bias para decir EXACTAMENTE qué hacer y con qué estructura:
-  Formato: "📈 VIX XX.X · IV Rank XX% · Flujo: XX% calls — [acción concreta]"
+  Formato: "📈 [VIX] · [IV Rank] · Flujo: XX% calls/puts — [flujo]"
 
-  Regla para la acción concreta:
-  - IV rank 50-75% + flujo CALLS → "vender PUT spreads (flujo alcista, premium vendible)"
-  - IV rank 50-75% + flujo PUTS  → "vender CALL spreads (flujo bajista, premium vendible)"
-  - IV rank 50-75% + flujo NEUTRO → "iron condor viable (premium vendible, sin sesgo claro)"
-  - IV rank > 75% + cualquier flujo → misma estructura anterior pero agrega "tamaño reducido"
-  - IV rank < 25% + cualquier flujo → "no vender premium — IV barata, mejor comprar dirección"
-  - IV rank 25-50% → "neutral — esperar expansión antes de vender"
+  Regla VIX (usar el valor numérico recibido en vix):
+  - vix < 15  → "VIX en compresión — interesante para operaciones vendidas"
+  - vix 15-20 → "VIX en compresión"
+  - vix > 20  → "VIX nervioso — cuidado al vender, podríamos tener desplazamiento"
 
-  Ej: "📈 VIX 17.2 · IV Rank 62% · Flujo: 71% calls — vender PUT spreads (flujo alcista, premium vendible)"
-  Ej: "📈 VIX 23.1 · IV Rank 81% · Flujo: 58% puts — vender CALL spreads, tamaño reducido (premium caro)"
-  Ej: "📈 VIX 14.8 · IV Rank 18% · Flujo: 52% calls — no vender premium — IV barata, mejor comprar dirección"
+  Regla IV Rank (usar iv_rank_pct):
+  - iv_rank_pct < 25  → "Prima barata (IV XX%) — no es momento para operaciones vendidas"
+  - iv_rank_pct 25-50 → "Prima normal (IV XX%)"
+  - iv_rank_pct 50-75 → "Prima cara (IV XX%) — buen momento para operaciones vendidas"
+  - iv_rank_pct > 75  → "Prima cara (IV XX%) — operaciones vendidas, tamaño reducido"
 
-- Si vix o iv_rank no están disponibles, omitir esa parte de la línea
+  Regla Flujo (usar flow_bias):
+  - bias CALLS → "Flujo: XX% calls — posible desplazamiento alcista"
+  - bias PUTS  → "Flujo: XX% puts — posible desplazamiento bajista"
+  - bias NEUTRO → "Flujo: neutral — sin sesgo claro"
+
+  Ejemplos finales:
+  "📈 VIX en compresión — interesante para operaciones vendidas · Prima cara (IV 62%) · Flujo: 71% calls — posible desplazamiento alcista"
+  "📈 VIX nervioso — cuidado al vender, podríamos tener desplazamiento · Prima cara (IV 81%), tamaño reducido · Flujo: 58% puts — posible desplazamiento bajista"
+  "📈 VIX en compresión · Prima barata (IV 18%) — no es momento para operaciones vendidas · Flujo: neutral — sin sesgo claro"
+
+- Si vix o iv_rank_pct no están disponibles, omitir esa parte de la línea
 - Nunca omitir la línea completa si al menos uno de los datos está presente
 
 ━━━ ZONAS VACÍAS — MUY IMPORTANTE ━━━
