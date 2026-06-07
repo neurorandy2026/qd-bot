@@ -33,6 +33,8 @@ def load() -> dict:
         config["anthropic_api_key"] = os.environ["ANTHROPIC_API_KEY"]
     if os.environ.get("DISCORD_WEBHOOK_ALUMNOS"):
         config["discord"]["webhook_alumnos"] = os.environ["DISCORD_WEBHOOK_ALUMNOS"]
+    if os.environ.get("DISCORD_WEBHOOK_FLUJO_INSTITUCIONAL"):
+        config["discord"]["webhook_flujo_institucional"] = os.environ["DISCORD_WEBHOOK_FLUJO_INSTITUCIONAL"]
 
     return config
 
