@@ -314,6 +314,13 @@ HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<div class="panel log-panel" style="margin-bottom:12px">
+  <h3>📋 Log del Bot <span class="live-badge">● LIVE</span>
+    <span class="tip section-tip" data-tip="Registro en tiempo real de toda la actividad del bot: lecturas, alertas, errores y acciones manuales. Se actualiza cada 5 seg.">?</span>
+  </h3>
+  {log_html}
+</div>
+
 <div class="preview-panel">
   <h3>📱 Vista Previa Discord — últimos mensajes del bot
     <span class="tip section-tip" data-tip="Muestra los últimos 3 mensajes que el bot envió a Discord. Verifica aquí qué recibieron tus coaches antes de que llegue al canal.">?</span>
@@ -326,7 +333,7 @@ HTML = """<!DOCTYPE html>
     <span class="tip section-tip" data-tip="Hazle una pregunta directa al bot. Consulta los datos actuales del mercado (precio, niveles, sesgo) para darte una respuesta concreta.">?</span>
   </h3>
   <form method="POST" action="/ask" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px">
-    <input type="text" name="question" placeholder="ej: ¿Hasta dónde podría llegar el SPX al alza hoy?"
+    <input id="ask-input" type="text" name="question" placeholder="ej: ¿Hasta dónde podría llegar el SPX al alza hoy?"
            style="flex:1;min-width:200px;background:#0d1117;border:1px solid #30363d;border-radius:8px;
                   color:#c9d1d9;padding:9px 12px;font-size:0.88em;min-height:42px;font-family:inherit"
            required autocomplete="off">
@@ -373,19 +380,11 @@ HTML = """<!DOCTYPE html>
   {prompt_preview_html}
 </div>
 
-<div class="panels" style="margin-top:12px">
-  <div class="panel">
-    <h3>💬 Últimos Mensajes a Discord
-      <span class="tip section-tip" data-tip="Copia de los últimos 2 mensajes enviados al canal principal de Discord con marca de tiempo.">?</span>
-    </h3>
-    {discord_msgs_html}
-  </div>
-  <div class="panel log-panel">
-    <h3>📋 Log del Bot <span class="live-badge">● LIVE</span>
-      <span class="tip section-tip" data-tip="Registro en tiempo real de toda la actividad: ciclos de lectura, alertas enviadas, errores y acciones manuales. Se actualiza cada 5 seg.">?</span>
-    </h3>
-    {log_html}
-  </div>
+<div class="panel" style="margin-top:12px">
+  <h3>💬 Últimos Mensajes a Discord
+    <span class="tip section-tip" data-tip="Copia de los últimos 2 mensajes enviados al canal principal de Discord con marca de tiempo.">?</span>
+  </h3>
+  {discord_msgs_html}
 </div>
 
 <div class="panel" style="margin-top:12px">
@@ -406,22 +405,21 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <script>
-// Auto-refresh — se pausa si el usuario está escribiendo en cualquier input
+// Auto-refresh cada 5s — NUNCA se detiene
+setTimeout(() => location.reload(), 5000);
+
+// Preserva el texto del input de consulta a través del reload
 (function() {{
-  let timer;
-  function scheduleReload() {{
-    clearTimeout(timer);
-    timer = setTimeout(() => location.reload(), 5000);
-  }}
-  scheduleReload();
-  document.addEventListener('focusin', function(e) {{
-    if (e.target.matches('input, textarea, select')) clearTimeout(timer);
-  }});
-  document.addEventListener('focusout', function(e) {{
-    if (e.target.matches('input, textarea, select')) scheduleReload();
-  }});
+  const KEY = 'qd_ask_draft';
+  const inp = document.getElementById('ask-input');
+  if (!inp) return;
+  const saved = sessionStorage.getItem(KEY);
+  if (saved) {{ inp.value = saved; sessionStorage.removeItem(KEY); }}
+  inp.addEventListener('input', () => sessionStorage.setItem(KEY, inp.value));
+  inp.closest('form').addEventListener('submit', () => sessionStorage.removeItem(KEY));
 }})();
-// Mobile: tap ? to toggle tooltip
+
+// Mobile: tap ? para tooltip
 document.addEventListener('click', function(e) {{
   const tip = e.target.closest('.tip');
   if (!tip) {{ document.querySelectorAll('.tip.open').forEach(t => t.classList.remove('open')); return; }}
