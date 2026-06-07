@@ -971,7 +971,7 @@ async def handle_index(request):
     accuracy_color = "green" if accuracy >= 70 else "yellow" if accuracy >= 50 else "red"
 
     log_html = "".join(
-        f'<div class="log-entry">{e}</div>' for e in reversed(_log[-20:])
+        f'<div class="log-entry">{e}</div>' for e in reversed(_log[-5:])
     ) or '<div class="log-entry" style="color:#8b949e">Sin actividad aún</div>'
 
     disc_msgs = data.get("discord_messages", [])[-2:]
