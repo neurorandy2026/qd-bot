@@ -11,6 +11,7 @@ Filtros de calidad aplicados:
 """
 
 import aiohttp
+import stats as st
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 from collections import defaultdict
@@ -247,6 +248,7 @@ async def scan_and_alert(api_key: str, webhook_url: str,
                     total_m = round(sum(p["notional"] for p in cluster) / 1_000_000, 1)
                     print(f"[DarkPool] ALERTA {ticker} ${total_m}M {side} "
                           f"({len(cluster)} prints)")
+                    st.record_darkpool_alert(ticker, total_m, side, len(cluster))
                     alerts_sent += 1
         except Exception as e:
             print(f"[DarkPool] Error webhook {ticker}: {e}")

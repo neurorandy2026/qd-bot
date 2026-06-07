@@ -295,6 +295,11 @@ HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<div class="panel" style="margin-top:12px">
+  <h3>🏦 Historial Dark Pool Institucional</h3>
+  {darkpool_history_html}
+</div>
+
 <div class="panel" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
   <div>
     <h3 style="margin-bottom:4px">📚 Lecciones de Aprendizaje</h3>
@@ -671,6 +676,27 @@ def _build_rules(rules: list) -> str:
     return html
 
 
+def _build_darkpool_history(dp_history: list) -> str:
+    if not dp_history:
+        return '<p style="color:#8b949e;font-size:0.82em">Sin alertas de dark pool aún — el scanner activa a las 9:30 AM ET</p>'
+    html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8em">'
+    html += '<tr style="color:#8b949e;border-bottom:1px solid #30363d"><th style="text-align:left;padding:4px 8px">Hora</th><th style="text-align:left;padding:4px 8px">Ticker</th><th style="text-align:right;padding:4px 8px">Notional</th><th style="text-align:center;padding:4px 8px">Dir</th><th style="text-align:center;padding:4px 8px">Prints</th><th style="text-align:left;padding:4px 8px">Fecha</th></tr>'
+    for e in dp_history[:20]:
+        color = "#3fb950" if e["direction"] == "↑" else "#f85149"
+        html += (
+            f'<tr style="border-bottom:1px solid #21262d">'
+            f'<td style="padding:5px 8px;color:#8b949e">{e["time"]}</td>'
+            f'<td style="padding:5px 8px;font-weight:600;color:#f0f6fc">{e["ticker"]}</td>'
+            f'<td style="padding:5px 8px;text-align:right;color:#58a6ff">${e["notional_m"]}M</td>'
+            f'<td style="padding:5px 8px;text-align:center;color:{color};font-size:1.1em">{e["direction"]}</td>'
+            f'<td style="padding:5px 8px;text-align:center;color:#8b949e">{e["prints"]}</td>'
+            f'<td style="padding:5px 8px;color:#8b949e;font-size:0.85em">{e["date"]}</td>'
+            f'</tr>'
+        )
+    html += '</table></div>'
+    return html
+
+
 def _build_discord_preview() -> str:
     if not _discord_preview:
         return '<div class="preview-empty">⏳ Aquí aparecerá el próximo mensaje que envíe el bot a Discord</div>'
@@ -762,6 +788,7 @@ async def handle_index(request):
         discord_msgs_html=discord_msgs_html,
         log_html=log_html,
         preview_html=_build_discord_preview(),
+        darkpool_history_html=_build_darkpool_history(data.get("darkpool_history", [])),
     )
     return web.Response(text=html, content_type="text/html")
 

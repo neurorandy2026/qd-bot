@@ -25,6 +25,7 @@ _defaults = {
     "last_ticker": "",
     "active_levels": {},   # {ticker: [{"strike": x, "type": "support"|"resistance", "ts": ...}]}
     "history": [],         # last 50 outcomes
+    "darkpool_history": [], # last 100 dark pool alerts
 }
 
 
@@ -116,6 +117,23 @@ def set_active_levels(ticker: str, supports: list, resistances: list):
         "resistances": [r["strike"] for r in resistances[:2]],
         "updated": datetime.now(ET).strftime("%I:%M %p ET"),
     }
+    _save(data)
+
+
+def record_darkpool_alert(ticker: str, notional_m: float, side: str, n_prints: int):
+    data = _load()
+    _reset_today_if_needed(data)
+    entry = {
+        "time": datetime.now(ET).strftime("%I:%M %p ET"),
+        "date": date.today().isoformat(),
+        "ticker": ticker,
+        "notional_m": notional_m,
+        "side": side,
+        "prints": n_prints,
+        "direction": "↑" if side == "ABOVE_ASK" else "↓",
+    }
+    data.setdefault("darkpool_history", []).insert(0, entry)
+    data["darkpool_history"] = data["darkpool_history"][:100]
     _save(data)
 
 
