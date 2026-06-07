@@ -392,12 +392,12 @@ HTML = """<!DOCTYPE html>
 
 <div class="panel" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
   <div>
-    <h3 style="margin-bottom:4px">📚 Lecciones de Aprendizaje
-      <span class="tip section-tip" data-tip="Banco de aprendizaje donde Randy enseña al bot con observaciones e imágenes. Las lecciones activas se inyectan en cada lectura de Claude.">?</span>
+    <h3 style="margin-bottom:4px">⚙️ Panel Admin
+      <span class="tip section-tip" data-tip="Acceso a lecciones de aprendizaje y log de preguntas. Solo para Randy.">?</span>
     </h3>
-    <p style="color:#8b949e;font-size:0.8em">{active_lessons} activas inyectadas en cada lectura de Claude</p>
+    <p style="color:#8b949e;font-size:0.8em">{active_lessons} lecciones activas · preguntas registradas</p>
   </div>
-  <a href="/lessons"><button class="btn-secondary">Abrir Lecciones →</button></a>
+  <a href="/admin" target="_blank"><button class="btn-secondary">Abrir Admin →</button></a>
 </div>
 
 <script>
@@ -576,6 +576,143 @@ document.getElementById('ask-form').addEventListener('submit', function() {{
   document.getElementById('ask-btn').disabled = true;
 }});
 </script>
+</body>
+</html>"""
+
+
+ADMIN_HTML = """<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QD Bot — Admin</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+          background: #0d1117; color: #c9d1d9; min-height: 100vh; padding: 20px;
+          max-width: 860px; margin: 0 auto; }}
+  .back-link {{ display: inline-block; color: #8b949e; font-size: 0.82em;
+                margin-bottom: 18px; text-decoration: none; }}
+  .back-link:hover {{ color: #58a6ff; }}
+  /* Header */
+  .admin-header {{ display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }}
+  .admin-badge {{ background: linear-gradient(135deg, #1f6feb, #7c3aed);
+                  color: #fff; font-size: 0.7em; font-weight: 800; letter-spacing: 2px;
+                  text-transform: uppercase; padding: 4px 10px; border-radius: 6px; }}
+  .admin-title {{ font-size: 1.4em; font-weight: 700; color: #f0f6fc; }}
+  /* Auth box */
+  .auth-wrap {{ display: flex; align-items: center; justify-content: center;
+                min-height: 60vh; }}
+  .auth-box {{ background: #161b22; border: 1px solid #30363d; border-radius: 14px;
+               padding: 36px 32px; width: 100%; max-width: 360px; text-align: center; }}
+  .auth-icon {{ font-size: 2.6em; margin-bottom: 12px; }}
+  .auth-box h2 {{ color: #f0f6fc; font-size: 1.15em; margin-bottom: 6px; }}
+  .auth-box p {{ color: #8b949e; font-size: 0.82em; margin-bottom: 22px; }}
+  .auth-box input {{ width: 100%; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 8px; color: #c9d1d9; padding: 13px; font-size: 1.4em;
+    text-align: center; letter-spacing: 6px; font-family: monospace;
+    outline: none; margin-bottom: 14px; transition: border-color 0.2s; }}
+  .auth-box input:focus {{ border-color: #1f6feb; box-shadow: 0 0 0 3px rgba(31,111,235,0.15); }}
+  .auth-btn {{ width: 100%; padding: 13px; background: linear-gradient(135deg,#1f6feb,#7c3aed);
+               color: #fff; border: none; border-radius: 8px; font-size: 0.95em;
+               font-weight: 700; cursor: pointer; letter-spacing: 0.5px; transition: opacity 0.2s; }}
+  .auth-btn:hover {{ opacity: 0.88; }}
+  .auth-error {{ color: #f85149; font-size: 0.8em; margin-top: 10px; }}
+  /* Tabs */
+  .tabs {{ display: flex; gap: 4px; margin-bottom: 20px; background: #161b22;
+           padding: 5px; border-radius: 10px; border: 1px solid #21262d; }}
+  .tab {{ flex: 1; padding: 10px 16px; text-align: center; font-size: 0.88em;
+          font-weight: 600; border-radius: 7px; cursor: pointer; color: #8b949e;
+          border: none; background: transparent; transition: all 0.2s; font-family: inherit; }}
+  .tab.active {{ background: #0d1117; color: #f0f6fc;
+                 box-shadow: 0 1px 4px rgba(0,0,0,0.4); }}
+  .tab-panel {{ display: none; }}
+  .tab-panel.active {{ display: block; }}
+  /* Panels */
+  .panel {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+            padding: 16px; margin-bottom: 14px; }}
+  .panel h3 {{ color: #8b949e; font-size: 0.76em; text-transform: uppercase;
+               letter-spacing: 1px; margin-bottom: 12px; }}
+  /* Lesson form */
+  .lesson-form {{ display: flex; flex-direction: column; gap: 10px; }}
+  .lesson-form textarea {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 10px 12px; font-size: 0.88em; resize: vertical;
+    min-height: 80px; font-family: inherit; }}
+  .lesson-form textarea:focus {{ outline: none; border-color: #58a6ff; }}
+  .form-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
+  .form-row select {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 8px; font-size: 0.85em; }}
+  .paste-zone {{ border: 2px dashed #30363d; border-radius: 8px; padding: 18px;
+    text-align: center; color: #8b949e; font-size: 0.85em; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s; background: #0d1117; position: relative; }}
+  .paste-zone:focus {{ outline: none; }}
+  .paste-zone.has-image {{ border-color: #238636; background: #0d2119; }}
+  .paste-zone.active {{ border-color: #58a6ff; background: #0d1a2e; }}
+  .paste-preview {{ max-width: 100%; max-height: 260px; border-radius: 6px; margin-top: 10px;
+    border: 1px solid #30363d; display: block; margin-left: auto; margin-right: auto; }}
+  .paste-clear {{ position: absolute; top: 8px; right: 10px; background: #6e1c1c;
+    color: #f85149; border: none; border-radius: 4px; padding: 3px 10px;
+    font-size: 0.75em; cursor: pointer; }}
+  /* Buttons */
+  button {{ border: none; padding: 10px 20px; font-size: 0.88em; font-weight: 600;
+            border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-family: inherit; }}
+  button:hover {{ opacity: 0.8; }}
+  .btn-primary {{ background: #238636; color: #fff; }}
+  .btn-secondary {{ background: #1f6feb; color: #fff; }}
+  .btn-ghost {{ background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }}
+  .btn-danger {{ background: #6e1c1c; color: #f85149; border: 1px solid #6e1c1c;
+                 font-size: 0.78em; padding: 4px 10px; }}
+  .btn-sm {{ padding: 4px 12px; font-size: 0.78em; }}
+  /* Lesson cards */
+  .lesson-card {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; }}
+  .lesson-card.inactive {{ opacity: 0.4; }}
+  .lesson-thumb {{ width: 72px; height: 54px; object-fit: cover; border-radius: 4px;
+    border: 1px solid #30363d; flex-shrink: 0; background: #21262d; cursor: pointer; }}
+  .lesson-thumb-empty {{ width: 72px; height: 54px; border-radius: 4px; border: 1px dashed #30363d;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 1.3em; color: #30363d; }}
+  .lesson-body {{ flex: 1; min-width: 0; }}
+  .lesson-rule {{ font-size: 0.85em; color: #c9d1d9; line-height: 1.4; margin-bottom: 4px; }}
+  .lesson-meta {{ font-size: 0.72em; color: #8b949e; }}
+  .lesson-actions {{ display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex-shrink: 0; }}
+  .cat-badge {{ display: inline-block; font-size: 0.7em; padding: 2px 7px; border-radius: 10px; font-weight: 600; }}
+  .toggle {{ cursor: pointer; font-size: 1.1em; }}
+  /* Modal */
+  .modal {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    z-index: 100; align-items: center; justify-content: center; cursor: zoom-out; }}
+  .modal.open {{ display: flex; }}
+  .modal img {{ max-width: 95vw; max-height: 90vh; border-radius: 8px; border: 1px solid #30363d; }}
+  /* Questions */
+  .stats-bar {{ display: flex; gap: 20px; background: #0d1117; border: 1px solid #21262d;
+                border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; flex-wrap: wrap; }}
+  .stat .n {{ font-size: 1.5em; font-weight: 700; color: #58a6ff; }}
+  .stat .l {{ font-size: 0.7em; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }}
+  .q-filter {{ width: 100%; padding: 9px 12px; background: #0d1117; border: 1px solid #30363d;
+               border-radius: 6px; color: #c9d1d9; font-size: 0.85em; font-family: inherit;
+               outline: none; margin-bottom: 12px; }}
+  .q-filter:focus {{ border-color: #58a6ff; }}
+  .q-card {{ background: #0d1117; border: 1px solid #21262d; border-radius: 8px;
+             padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid #1f6feb; }}
+  .q-meta {{ font-size: 0.7em; color: #8b949e; margin-bottom: 6px; }}
+  .q-text {{ font-size: 0.88em; color: #f0f6fc; font-weight: 600; margin-bottom: 8px; }}
+  .q-answer {{ font-size: 0.82em; color: #8b949e; line-height: 1.55;
+               border-top: 1px solid #21262d; padding-top: 8px; }}
+  .empty-state {{ color: #8b949e; text-align: center; padding: 40px; font-size: 0.88em; }}
+</style>
+</head>
+<body>
+<a class="back-link" href="/">← Dashboard</a>
+<div class="admin-header">
+  <span class="admin-badge">Admin</span>
+  <span class="admin-title">Panel de Control</span>
+</div>
+
+{body}
+
+<div class="modal" id="img-modal" onclick="this.classList.remove('open')">
+  <img id="modal-img" src="">
+</div>
 </body>
 </html>"""
 
@@ -1225,6 +1362,183 @@ async def handle_ask(request):
                         content_type="text/html")
 
 
+def _build_admin_page(questions: list) -> str:
+    """Renders the full admin page body (tabs: Lecciones + Preguntas)."""
+    all_lessons = ls.get_all()
+    active_count = sum(1 for l in all_lessons if l.get("active", True))
+
+    # -- Lessons tab --
+    lessons_list_html = _build_lessons(all_lessons)
+    lessons_tab = f"""
+<div class="panel">
+  <h3>Nueva Lección</h3>
+  <form class="lesson-form" method="POST" action="/add-lesson" enctype="multipart/form-data">
+    <div id="paste-zone" class="paste-zone" tabindex="0">
+      <span id="paste-label">📋 Pega tu capture de Quant Data aquí — <kbd style="background:#21262d;padding:2px 6px;border-radius:3px">Cmd+V</kbd> &nbsp;·&nbsp; o arrastra la imagen</span>
+      <button type="button" class="paste-clear" id="paste-clear-btn" onclick="clearPaste(event)">✕ quitar</button>
+      <img id="paste-preview" class="paste-preview" style="display:none">
+    </div>
+    <input type="hidden" name="image_data" id="image_data">
+    <input type="hidden" name="image_mime" id="image_mime">
+    <textarea name="lesson_text" id="lesson_text"
+      placeholder="Describe qué pasó y qué quieres que el bot aprenda..." required></textarea>
+    <div class="form-row">
+      <select name="category">
+        <option value="General">General</option>
+        <option value="DEX">DEX</option>
+        <option value="GEX">GEX</option>
+        <option value="Formato">Formato</option>
+        <option value="Error detectado">Error detectado</option>
+        <option value="Ejemplo bueno">Ejemplo bueno</option>
+      </select>
+      <button type="submit" class="btn-secondary">🧠 Analizar y Guardar</button>
+    </div>
+  </form>
+</div>
+<div class="panel">
+  <h3>Lecciones guardadas ({len(all_lessons)}) — {active_count} activas en Claude</h3>
+  {lessons_list_html}
+</div>"""
+
+    # -- Questions tab --
+    today_str = date.today().isoformat()
+    today_count = sum(1 for q in questions if q.get("date") == today_str)
+    q_cards = ""
+    if not questions:
+        q_cards = '<div class="empty-state">Aún no hay preguntas registradas.</div>'
+    else:
+        for q in questions:
+            q_cards += f"""
+    <div class="q-card">
+      <div class="q-meta">{q.get("date","")} · {q.get("time","")}</div>
+      <div class="q-text">❓ {q.get("question","")}</div>
+      <div class="q-answer">💬 {q.get("answer","")}</div>
+    </div>"""
+
+    questions_tab = f"""
+<div class="stats-bar">
+  <div class="stat"><div class="n">{len(questions)}</div><div class="l">Total</div></div>
+  <div class="stat"><div class="n">{today_count}</div><div class="l">Hoy</div></div>
+</div>
+<input class="q-filter" id="q-search" type="text" placeholder="Filtrar preguntas..." oninput="filterQ()">
+<div id="q-list">{q_cards}</div>"""
+
+    body = f"""
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(0,this)">📚 Lecciones <span style="background:#1f6feb;color:#fff;font-size:0.75em;padding:1px 6px;border-radius:8px;margin-left:4px">{active_count}</span></button>
+  <button class="tab" onclick="switchTab(1,this)">❓ Preguntas <span style="background:#30363d;color:#c9d1d9;font-size:0.75em;padding:1px 6px;border-radius:8px;margin-left:4px">{len(questions)}</span></button>
+</div>
+<div class="tab-panel active" id="tab-0">{lessons_tab}</div>
+<div class="tab-panel" id="tab-1">{questions_tab}</div>
+
+<script>
+function switchTab(idx, el) {{
+  document.querySelectorAll('.tab').forEach((t,i) => {{
+    t.classList.toggle('active', i === idx);
+  }});
+  document.querySelectorAll('.tab-panel').forEach((p,i) => {{
+    p.classList.toggle('active', i === idx);
+  }});
+}}
+function filterQ() {{
+  const q = document.getElementById('q-search').value.toLowerCase();
+  document.querySelectorAll('.q-card').forEach(c => {{
+    c.style.display = c.textContent.toLowerCase().includes(q) ? '' : 'none';
+  }});
+}}
+function openModal(id) {{
+  document.getElementById('modal-img').src = '/lesson-image/' + id;
+  document.getElementById('img-modal').classList.add('open');
+}}
+function clearPaste(e) {{
+  e.stopPropagation();
+  document.getElementById('image_data').value = '';
+  document.getElementById('image_mime').value = '';
+  document.getElementById('paste-preview').style.display = 'none';
+  document.getElementById('paste-clear-btn').style.display = 'none';
+  document.getElementById('paste-label').textContent = '📋 Pega tu capture de Quant Data aquí — Cmd+V · o arrastra la imagen';
+  document.getElementById('paste-zone').classList.remove('has-image', 'active');
+}}
+(function() {{
+  const zone = document.getElementById('paste-zone');
+  if (!zone) return;
+  const preview = document.getElementById('paste-preview');
+  const clearBtn = document.getElementById('paste-clear-btn');
+  const labelEl = document.getElementById('paste-label');
+  const imgData = document.getElementById('image_data');
+  const imgMime = document.getElementById('image_mime');
+  const textarea = document.getElementById('lesson_text');
+  function applyImage(file) {{
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {{
+      const dataUrl = ev.target.result;
+      imgData.value = dataUrl.split(',')[1];
+      imgMime.value = file.type;
+      preview.src = dataUrl;
+      preview.style.display = 'block';
+      zone.classList.add('has-image');
+      zone.classList.remove('active');
+      clearBtn.style.display = 'block';
+      labelEl.textContent = '✅ Capture listo';
+      textarea.focus();
+    }};
+    reader.readAsDataURL(file);
+  }}
+  document.addEventListener('paste', function(e) {{
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {{
+      if (items[i].type.startsWith('image/')) {{
+        e.preventDefault(); applyImage(items[i].getAsFile()); return;
+      }}
+    }}
+  }});
+  zone.addEventListener('dragover', function(e) {{ e.preventDefault(); zone.classList.add('active'); }});
+  zone.addEventListener('dragleave', function() {{ zone.classList.remove('active'); }});
+  zone.addEventListener('drop', function(e) {{
+    e.preventDefault(); zone.classList.remove('active'); applyImage(e.dataTransfer.files[0]);
+  }});
+  zone.addEventListener('click', function() {{ zone.focus(); zone.classList.add('active'); }});
+  zone.addEventListener('blur', function() {{ if (!imgData.value) zone.classList.remove('active'); }});
+}})();
+</script>"""
+
+    return ADMIN_HTML.format(body=body)
+
+
+def _admin_auth_form(error: bool = False) -> str:
+    err_html = '<p class="auth-error">Contraseña incorrecta. Intenta de nuevo.</p>' if error else ''
+    body = f"""
+<div class="auth-wrap">
+  <div class="auth-box">
+    <div class="auth-icon">🔐</div>
+    <h2>Acceso Admin</h2>
+    <p>Solo para Randy</p>
+    <form method="POST" action="/admin">
+      <input type="password" name="pwd" placeholder="••••" autofocus>
+      <button type="submit" class="auth-btn">Entrar</button>
+    </form>
+    {err_html}
+  </div>
+</div>"""
+    return ADMIN_HTML.format(body=body)
+
+
+async def handle_admin_page(request):
+    """GET /admin — muestra formulario de contraseña."""
+    return web.Response(text=_admin_auth_form(), content_type="text/html")
+
+
+async def handle_admin_auth(request):
+    """POST /admin — valida contraseña y muestra panel completo."""
+    data = await request.post()
+    if data.get("pwd", "") != RULES_PASSWORD:
+        return web.Response(text=_admin_auth_form(error=True), content_type="text/html")
+    questions = st.get().get("questions_log", [])
+    return web.Response(text=_build_admin_page(questions), content_type="text/html")
+
+
 async def handle_questions_page(request):
     """GET /preguntas — muestra formulario de contraseña."""
     content = """
@@ -1496,6 +1810,8 @@ def create_app() -> web.Application:
     app.router.add_post("/ask", handle_ask)
     app.router.add_get("/preguntas", handle_questions_page)
     app.router.add_post("/preguntas", handle_questions_auth)
+    app.router.add_get("/admin", handle_admin_page)
+    app.router.add_post("/admin", handle_admin_auth)
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
     app.router.add_post("/delete-rule", handle_delete_rule)
