@@ -795,10 +795,12 @@ async def handle_index(request):
 
 async def handle_trigger(request):
     tipo = request.rel_url.query.get("tipo", "lectura")
+    add_log(f"Boton presionado: {tipo} — callback={'OK' if _trigger_callback else 'NO REGISTRADO'}")
     if _trigger_callback:
         import asyncio
         asyncio.create_task(_trigger_callback(tipo))
-        add_log(f"Disparo manual ({tipo}) desde el panel")
+    else:
+        add_log("[ERROR] Monitor loop no esta corriendo — reinicia el servicio en Railway")
     raise web.HTTPFound("/")
 
 
