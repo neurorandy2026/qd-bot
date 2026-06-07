@@ -11,6 +11,7 @@ import claude_client
 ET = ZoneInfo("America/New_York")
 _log: list = []
 _trigger_callback = None
+_domingo_callback = None
 _anthropic_key: str = ""
 _pending_lessons: dict = {}  # temp_id -> pending lesson data
 
@@ -18,6 +19,11 @@ _pending_lessons: dict = {}  # temp_id -> pending lesson data
 def set_trigger_callback(fn):
     global _trigger_callback
     _trigger_callback = fn
+
+
+def set_domingo_callback(fn):
+    global _domingo_callback
+    _domingo_callback = fn
 
 
 def set_anthropic_key(key: str):
@@ -69,6 +75,7 @@ HTML = """<!DOCTYPE html>
   .btn-secondary {{ background: #1f6feb; color: #fff; }}
   .btn-ghost {{ background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }}
   .btn-danger {{ background: #6e1c1c; color: #f85149; border: 1px solid #6e1c1c; font-size: 0.78em; padding: 4px 10px; }}
+  .btn-purple {{ background: #4a1d96; color: #c4b5fd; border: 1px solid #6d28d9; }}
   .btn-sm {{ padding: 4px 12px; font-size: 0.78em; }}
   .panels {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
   @media(max-width: 600px) {{ .panels {{ grid-template-columns: 1fr; }} }}
@@ -207,6 +214,9 @@ HTML = """<!DOCTYPE html>
   </form>
   <form method="POST" action="/trigger?tipo=cierre" style="display:inline">
     <button type="submit" class="btn-ghost">🔔 Cierre</button>
+  </form>
+  <form method="POST" action="/domingo" style="display:inline">
+    <button type="submit" class="btn-purple">📅 Analisis Dominical SPX</button>
   </form>
 </div>
 
@@ -716,6 +726,14 @@ async def handle_trigger(request):
     raise web.HTTPFound("/")
 
 
+async def handle_domingo(request):
+    if _domingo_callback:
+        import asyncio
+        asyncio.create_task(_domingo_callback())
+        add_log("Analisis dominical SPX iniciado desde el panel...")
+    raise web.HTTPFound("/")
+
+
 async def handle_add_rule(request):
     data = await request.post()
     text = data.get("rule_text", "").strip()
@@ -913,6 +931,7 @@ def create_app() -> web.Application:
     app = web.Application(client_max_size=10 * 1024 * 1024)  # 10MB max upload
     app.router.add_get("/", handle_index)
     app.router.add_post("/trigger", handle_trigger)
+    app.router.add_post("/domingo", handle_domingo)
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
     app.router.add_post("/delete-rule", handle_delete_rule)

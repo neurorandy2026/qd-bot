@@ -11,6 +11,7 @@ import lessons as ls
 import notifier
 import dashboard
 import stats
+import sunday_analysis
 
 ET = ZoneInfo("America/New_York")
 PRE_MARKET   = time(9, 25)   # Opening message 5 min before open
@@ -135,6 +136,23 @@ async def run_ticker(ticker: str, config: dict, session: aiohttp.ClientSession, 
     _last_analysis[ticker] = analysis
 
 
+async def domingo_trigger() -> None:
+    """Called from dashboard — runs the full Sunday SPX analysis."""
+    try:
+        config = config_manager.load()
+        qd_key = config.get("qd_api_key", "")
+        anthropic_key = config.get("anthropic_api_key", "")
+        webhook = config.get("discord", {}).get("webhook_alumnos", "")
+        if not qd_key or not anthropic_key or not webhook:
+            dashboard.add_log("[ERROR] Faltan credenciales para analisis dominical")
+            return
+        dashboard.add_log("Recolectando datos SPX/SPY del viernes...")
+        status = await sunday_analysis.run_domingo_analysis(qd_key, anthropic_key, webhook)
+        dashboard.add_log(f"Domingo: {status}")
+    except Exception as e:
+        dashboard.add_log(f"[ERROR] Analisis dominical: {e}")
+
+
 async def manual_trigger(tipo: str = "lectura") -> None:
     """Called from dashboard — always posts regardless of change detection."""
     try:
@@ -171,6 +189,7 @@ async def monitor_loop() -> None:
     port = int(os.environ.get("PORT", 8080))
     await dashboard.start_dashboard(port)
     dashboard.set_trigger_callback(manual_trigger)
+    dashboard.set_domingo_callback(domingo_trigger)
     _cfg = config_manager.load()
     dashboard.set_anthropic_key(_cfg.get("anthropic_api_key", ""))
     dashboard.add_log("QD Bot iniciado")
