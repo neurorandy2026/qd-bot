@@ -242,6 +242,9 @@ HTML = """<!DOCTYPE html>
   <form method="POST" action="/darkpool-status" style="display:inline">
     <button type="submit" class="btn-teal">🏦 Estado Dark Pool</button>
   </form>
+  <form method="POST" action="/reset-accuracy" style="display:inline" onsubmit="return confirm('¿Resetear contadores de precisión?')">
+    <button type="submit" class="btn-danger" style="font-size:0.78em;padding:6px 12px">🔄 Reset Precisión</button>
+  </form>
 </div>
 
 <div class="preview-panel">
@@ -780,6 +783,18 @@ async def handle_domingo(request):
     raise web.HTTPFound("/")
 
 
+async def handle_reset_accuracy(request):
+    import stats as st
+    data = st._load()
+    data["levels_held"] = 0
+    data["levels_broken"] = 0
+    data["history"] = []
+    data["tested_today"] = {"date": "", "strikes": []}
+    st._save(data)
+    add_log("✅ Precisión reseteada — contadores en cero")
+    raise web.HTTPFound("/")
+
+
 async def handle_darkpool_status(request):
     import darkpool_scanner
     import config_manager
@@ -998,6 +1013,7 @@ def create_app() -> web.Application:
     app.router.add_post("/trigger", handle_trigger)
     app.router.add_post("/domingo", handle_domingo)
     app.router.add_post("/darkpool-status", handle_darkpool_status)
+    app.router.add_post("/reset-accuracy", handle_reset_accuracy)
     app.router.add_post("/add-rule", handle_add_rule)
     app.router.add_post("/toggle-rule", handle_toggle_rule)
     app.router.add_post("/delete-rule", handle_delete_rule)
