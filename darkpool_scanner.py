@@ -112,9 +112,13 @@ async def fetch_large_prints(session: aiohttp.ClientSession, api_key: str) -> li
             timeout=aiohttp.ClientTimeout(total=15),
         ) as resp:
             if resp.status != 200:
+                text = await resp.text()
+                print(f"[DarkPool] Error {resp.status}: {text[:300]}")
                 return []
             data = await resp.json()
-            return data.get("data", [])
+            prints = data.get("data", [])
+            print(f"[DarkPool] API respondio: {len(prints)} prints")
+            return prints
     except Exception as e:
         print(f"[DarkPool] Error fetch: {e}")
         return []
