@@ -383,14 +383,20 @@ async def monitor_loop() -> None:
                                 analysis = ana.analyze(market_data)
                                 prev = _last_analysis.get(ticker)
 
-                                # Track level outcomes
+                                # Track level outcomes — only when price is near the level
                                 if prev and market_data.get("price"):
                                     price = market_data["price"]
+                                    # Proximity: 0.2% of price (SPX ~12pts, SPY ~1.2pts)
+                                    proximity = price * 0.002
                                     for sup in prev.get("supports", []):
-                                        if sup["dex_signal"] in ("preferido", "solido", "cuidado"):
-                                            held = price >= sup["strike"]
-                                            stats.record_level_outcome(
-                                                sup["strike"], held, ticker)
+                                        if sup["dex_signal"] not in ("preferido", "solido", "cuidado"):
+                                            continue
+                                        strike = sup["strike"]
+                                        # Only evaluate if price actually tested the level
+                                        if abs(price - strike) > proximity:
+                                            continue
+                                        held = price >= strike - (proximity * 0.5)
+                                        stats.record_level_outcome(strike, held, ticker)
 
                                 # Change detection → immediate post
                                 if ana.detect_significant_change(prev, analysis):

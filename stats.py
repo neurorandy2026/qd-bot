@@ -78,6 +78,21 @@ def record_lectura(ticker: str, price: float, tipo: str, message: str = ""):
 
 def record_level_outcome(strike: float, held: bool, ticker: str):
     data = _load()
+    today_str = date.today().isoformat()
+
+    # Reset tested strikes when a new day starts
+    tested = data.get("tested_today", {})
+    if tested.get("date") != today_str:
+        tested = {"date": today_str, "strikes": []}
+
+    # Only record each (ticker, strike) ONCE per session
+    key = f"{ticker}_{strike}"
+    if key in tested["strikes"]:
+        return
+
+    tested["strikes"].append(key)
+    data["tested_today"] = tested
+
     outcome = "✅ Aguantó" if held else "❌ Rompió"
     if held:
         data["levels_held"] += 1
