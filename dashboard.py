@@ -782,9 +782,17 @@ async def handle_domingo(request):
 
 async def handle_darkpool_status(request):
     import darkpool_scanner
+    import config_manager
+    import notifier
     status = darkpool_scanner.get_status()
     for line in status.split("\n"):
         add_log(line)
+    config = config_manager.load()
+    webhook = config.get("discord", {}).get("webhook_flujo_institucional", "")
+    if webhook:
+        import asyncio
+        asyncio.create_task(notifier.send_webhook(webhook, status))
+        add_discord_preview(status, "DARK POOL", "Estado")
     raise web.HTTPFound("/")
 
 
