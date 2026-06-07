@@ -119,6 +119,56 @@ async def fetch_large_prints(session: aiohttp.ClientSession, api_key: str) -> li
         return []
 
 
+def get_status() -> str:
+    """Resumen del estado actual del scanner para mostrar en el dashboard."""
+    now = _now_et()
+    lines = [f"📊 **ESTADO DARK POOL** — {now.strftime('%I:%M %p ET')}"]
+
+    # Clusters activos (acumulando pero sin alertar aún)
+    active_clusters = []
+    for ticker, cluster in _clusters.items():
+        active = [p for p in cluster
+                  if (now - p["time"]).total_seconds() <= CLUSTER_WINDOW_MIN * 60]
+        if not active:
+            continue
+        total = sum(p["notional"] for p in active)
+        side  = active[-1]["side"]
+        falta = max(0, CLUSTER_THRESHOLD - total)
+        active_clusters.append((ticker, total, falta, side, len(active)))
+
+    if active_clusters:
+        lines.append("🔄 **En acumulación:**")
+        for ticker, total, falta, side, n in sorted(active_clusters,
+                                                     key=lambda x: x[1], reverse=True):
+            total_m = round(total / 1_000_000, 1)
+            falta_m = round(falta / 1_000_000, 1)
+            dir_tag = "↑" if side == "ABOVE_ASK" else "↓"
+            lines.append(f"  • **{ticker}** {dir_tag} ${total_m}M acumulados "
+                         f"({n} prints) — faltan ${falta_m}M para alerta")
+    else:
+        lines.append("⏳ Sin acumulación activa en este momento")
+
+    # Alertas enviadas hoy
+    if _last_alert_time:
+        lines.append("✅ **Alertas enviadas hoy:**")
+        for ticker, t in sorted(_last_alert_time.items(),
+                                 key=lambda x: x[1], reverse=True):
+            lines.append(f"  • {ticker} — última alerta {t.strftime('%I:%M %p ET')}")
+    else:
+        lines.append("📭 Sin alertas enviadas en esta sesión")
+
+    # Prints escaneados
+    lines.append(f"👁 Prints únicos escaneados: {len(_seen_ids)}")
+
+    # Horario
+    if _in_valid_hours():
+        lines.append("🟢 Scanner activo")
+    else:
+        lines.append(f"⚫ Scanner inactivo — activa a las 9:30 AM ET")
+
+    return "\n".join(lines)
+
+
 async def scan_and_alert(api_key: str, webhook_url: str,
                           session: aiohttp.ClientSession) -> int:
     """
