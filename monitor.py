@@ -184,6 +184,7 @@ async def _post_reading(ticker: str, analysis: dict, config: dict, tipo: str,
             stats.set_active_levels(ticker, analysis.get("supports", []),
                                     analysis.get("resistances", []))
             dashboard.add_log(f"[{tipo.upper()}] {ticker} ${analysis.get('price', 0):.0f} → Discord ✅")
+            dashboard.add_discord_preview(message, tipo, ticker)
         else:
             err = "[ERROR] Discord webhook fallo"
             dashboard.add_log(err)
@@ -259,8 +260,13 @@ async def domingo_trigger() -> None:
             dashboard.add_log("[ERROR] Faltan credenciales para analisis dominical")
             return
         dashboard.add_log("Recolectando datos SPX/SPY del viernes...")
-        status = await sunday_analysis.run_domingo_analysis(qd_key, anthropic_key, webhook)
+        report, data = await sunday_analysis.generate_domingo_report(qd_key, anthropic_key)
+        session_date = data.get("session_date", "")
+        ok = await sunday_analysis.send_domingo_to_discord(report, webhook, session_date)
+        status = f"Informe dominical enviado ({session_date})" if ok else "Error al enviar a Discord"
         dashboard.add_log(f"Domingo: {status}")
+        if ok:
+            dashboard.add_discord_preview(report[:1800], "DOMINGO", "SPX")
     except Exception as e:
         dashboard.add_log(f"[ERROR] Analisis dominical: {e}")
 

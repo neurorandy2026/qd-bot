@@ -14,6 +14,9 @@ _trigger_callback = None
 _domingo_callback = None
 _anthropic_key: str = ""
 _pending_lessons: dict = {}  # temp_id -> pending lesson data
+_discord_preview: list = []  # últimos 3 mensajes enviados a Discord
+
+RULES_PASSWORD = "1611"
 
 
 def set_trigger_callback(fn):
@@ -38,6 +41,15 @@ def add_log(msg: str):
     if len(_log) > 30:
         _log.pop(0)
     print(f"[Dashboard] {entry}")
+
+
+def add_discord_preview(text: str, tipo: str, label: str = ""):
+    """Guarda el mensaje enviado a Discord para mostrarlo en el panel de preview."""
+    global _discord_preview
+    now = datetime.now(ET).strftime("%I:%M %p ET")
+    _discord_preview.insert(0, {"text": text, "tipo": tipo.upper(), "label": label, "time": now})
+    if len(_discord_preview) > 3:
+        _discord_preview.pop()
 
 
 HTML = """<!DOCTYPE html>
@@ -100,6 +112,14 @@ HTML = """<!DOCTYPE html>
   .discord-msg {{ background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
                   margin-bottom: 8px; font-size: 0.78em; white-space: pre-wrap; line-height: 1.5; }}
   .discord-msg .msg-header {{ color: #8b949e; font-size: 0.85em; margin-bottom: 6px; }}
+  .preview-panel {{ background: #161b22; border: 1px solid #1f6feb; border-radius: 10px; padding: 14px; margin-bottom: 12px; }}
+  .preview-panel h3 {{ color: #58a6ff; font-size: 0.78em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }}
+  .preview-msg {{ background: #0d1117; border-left: 3px solid #1f6feb; border-radius: 0 8px 8px 0; padding: 10px 14px;
+                  margin-bottom: 10px; font-size: 0.82em; white-space: pre-wrap; line-height: 1.6; color: #c9d1d9; }}
+  .preview-msg .msg-meta {{ color: #58a6ff; font-size: 0.8em; margin-bottom: 6px; font-weight: 600; }}
+  .preview-empty {{ color: #8b949e; font-size: 0.82em; text-align: center; padding: 20px; }}
+  .pwd-input {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;
+                padding: 8px 10px; font-size: 0.85em; width: 90px; }}
   /* Criteria styles */
   .criteria-form {{ display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }}
   .criteria-form input[type=text] {{ flex: 1; min-width: 200px; background: #0d1117; border: 1px solid #30363d;
@@ -224,6 +244,11 @@ HTML = """<!DOCTYPE html>
   </form>
 </div>
 
+<div class="preview-panel">
+  <h3>📱 Vista Previa Discord — últimos mensajes del bot</h3>
+  {preview_html}
+</div>
+
 <div class="panels">
   <div class="panel">
     <h3>📍 Niveles Activos</h3>
@@ -247,6 +272,7 @@ HTML = """<!DOCTYPE html>
       <option value="Mensajes">Mensajes</option>
       <option value="Alertas">Alertas</option>
     </select>
+    <input type="password" name="password" placeholder="🔑 Clave" class="pwd-input" required>
     <button type="submit" class="btn-primary btn-sm">+ Agregar</button>
   </form>
 
@@ -642,6 +668,21 @@ def _build_rules(rules: list) -> str:
     return html
 
 
+def _build_discord_preview() -> str:
+    if not _discord_preview:
+        return '<div class="preview-empty">⏳ Aquí aparecerá el próximo mensaje que envíe el bot a Discord</div>'
+    html = ""
+    for m in _discord_preview:
+        label = f"{m['tipo']}" + (f" · {m['label']}" if m['label'] else "")
+        html += (
+            f'<div class="preview-msg">'
+            f'<div class="msg-meta">📤 {label} · {m["time"]}</div>'
+            f'{m["text"]}'
+            f'</div>'
+        )
+    return html
+
+
 def _build_prompt_preview(prompt: str) -> str:
     if not prompt:
         return ""
@@ -686,7 +727,7 @@ async def handle_index(request):
         f'<div class="log-entry">{e}</div>' for e in reversed(_log[-20:])
     ) or '<div class="log-entry" style="color:#8b949e">Sin actividad aún</div>'
 
-    disc_msgs = data.get("discord_messages", [])
+    disc_msgs = data.get("discord_messages", [])[-2:]
     discord_msgs_html = "".join(
         f'<div class="discord-msg"><div class="msg-header">📤 {m["tipo"]} · {m["ticker"]} · {m["time"]}</div>{m["text"]}</div>'
         for m in disc_msgs
@@ -717,6 +758,7 @@ async def handle_index(request):
         prompt_preview_html=_build_prompt_preview(crit_data.get("active_prompt", "")),
         discord_msgs_html=discord_msgs_html,
         log_html=log_html,
+        preview_html=_build_discord_preview(),
     )
     return web.Response(text=html, content_type="text/html")
 
@@ -748,6 +790,9 @@ async def handle_darkpool_status(request):
 
 async def handle_add_rule(request):
     data = await request.post()
+    if data.get("password", "") != RULES_PASSWORD:
+        add_log("[ERROR] Clave incorrecta — regla no agregada")
+        raise web.HTTPFound("/")
     text = data.get("rule_text", "").strip()
     category = data.get("category", "General")
     if text:
