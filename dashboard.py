@@ -241,6 +241,9 @@ HTML = """<!DOCTYPE html>
   <span style="color:#8b949e">·</span>
   <span>{last_ticker} <strong style="color:#58a6ff">${last_price}</strong></span>
   <span style="color:#8b949e;font-size:0.8em">Último msg: {last_msg_time}</span>
+  <span style="margin-left:auto;background:#0a1f12;border:1px solid #2ea043;border-radius:20px;
+               padding:4px 12px;font-size:0.8em;font-weight:700;color:#3fb950;
+               letter-spacing:0.5px;animation:pulse 2s infinite;white-space:nowrap">● LIVE</span>
 </div>
 
 <div class="grid">
