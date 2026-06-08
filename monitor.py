@@ -399,8 +399,8 @@ async def monitor_loop() -> None:
                                         held = price >= strike - (proximity * 0.5)
                                         stats.record_level_outcome(strike, held, ticker)
 
-                                # Change detection → immediate post
-                                if ana.detect_significant_change(prev, analysis):
+                                # Change detection → immediate post (only if prev exists)
+                                if prev and ana.detect_significant_change(prev, analysis):
                                     enriched = await qd_client.fetch_enriched_context(
                                         session, ticker, config["qd_api_key"])
                                     await _post_reading(ticker, analysis, config,
