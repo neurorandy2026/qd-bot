@@ -1219,7 +1219,7 @@ async def handle_trigger(request):
         asyncio.create_task(_trigger_callback(tipo))
     else:
         add_log("[ERROR] Monitor loop no esta corriendo — reinicia el servicio en Railway")
-    return await handle_index(request)
+    raise web.HTTPFound("/")
 
 
 async def handle_domingo(request):
