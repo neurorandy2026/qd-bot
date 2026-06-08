@@ -35,6 +35,8 @@ def load() -> dict:
         config["discord"]["webhook_alumnos"] = os.environ["DISCORD_WEBHOOK_ALUMNOS"]
     if os.environ.get("DISCORD_WEBHOOK_FLUJO_INSTITUCIONAL"):
         config["discord"]["webhook_flujo_institucional"] = os.environ["DISCORD_WEBHOOK_FLUJO_INSTITUCIONAL"]
+    if os.environ.get("TICKERS"):
+        config["tickers"] = [t.strip() for t in os.environ["TICKERS"].split(",")]
 
     return config
 

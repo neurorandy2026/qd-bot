@@ -140,7 +140,8 @@ async def _check_sweep_alerts(ticker: str, config: dict,
         msg = _format_sweep_alert(trade, ticker)
         dashboard.add_log(f"[SWEEP] {ticker} ${int(trade['strike'])} "
                           f"${round(trade['premium']/1000)}K{'  GOLDEN' if trade.get('golden') else ''}")
-        await notifier.send_webhook(config["discord"]["webhook_alumnos"], msg)
+        sweep_webhook = config["discord"].get("webhook_flujo_institucional") or config["discord"]["webhook_alumnos"]
+        await notifier.send_webhook(sweep_webhook, msg)
 
 
 # ─────────────────────────────────────────────
